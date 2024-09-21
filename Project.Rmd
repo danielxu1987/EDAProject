@@ -150,6 +150,58 @@ server <- function(input, output) {
 shinyApp(ui = ui, server = server)
 ```
 
+In boxplot, after choosing different countries, it is noticeable that developed countries have less mortality than developing countries from poor hygiene (e.g. water quality, unsafe sanitation and no access to handwashing facility). Two comparisons are drawn here between the *Uk* and *Tanzania*, as well as the *Netherlands* and *Cambodia*, which share similar population according to [Worldometers].(https://www.worldometers.info/world-population/population-by-country/)
+
+```{r boxcompare, echo=FALSE}
+# Define UI for application that draws a histogram
+ui <- fluidPage(
+
+    # Application title
+    titlePanel("UK vs Tanzania | Netherlands vs Cambodia"),
+
+    # Sidebar with a slider input for number of bins 
+    sidebarLayout(
+        sidebarPanel(
+          selectInput(inputId = "var", label = "Choose death cause", choices = names(df[, -c(1:3)])),
+        ),
+        # Show a plot of the generated distribution
+        mainPanel(
+           plotOutput("boxplot")
+        )
+    )
+)
+
+# Define server logic required to draw a histogram
+server <- function(input, output) {
+  # Render the side-by-side histograms
+  output$boxplot <- renderPlot({
+    sel_var <- input$var
+    
+    dataUK <- df[df['Entity']=='United Kingdom',] #df[df['Entity']=='China',]
+    dataTAN <- df[df['Entity']=='Tanzania',]
+    dataNLD <- df[df['Entity']=='Netherlands',]
+    dataCAM <- df[df['Entity']=='Cambodia',]
+    
+    p1 <- ggplot(dataUK) + geom_boxplot(aes_string(y=sel_var)) +
+      labs(x = input$var, y= 'Count', title = 'UK')
+    
+    p2 <- ggplot(dataTAN) + geom_boxplot(aes_string(y=sel_var)) +
+      labs(x = input$var, y= 'Count', title = 'Tanzania')
+    
+    p3 <- ggplot(dataNLD) + geom_boxplot(aes_string(y=sel_var)) +
+      labs(x = input$var, y= 'Count', title = 'Netherlands')
+    
+    p4 <- ggplot(dataCAM) + geom_boxplot(aes_string(y=sel_var)) +
+      labs(x = input$var, y= 'Count', title = 'Cambodia')
+    
+    grid.arrange(p1, p2, p3, p4, nrow=2)
+  })
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+```
+
 ### TODO
 
 ```{r histdouble, echo=FALSE}

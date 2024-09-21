@@ -75,7 +75,9 @@ server <- function(input, output) {
   # Render the side-by-side histograms
   output$boxplot <- renderPlot({
     data <- df[df['Entity']==input$con,] #df[df['Entity']=='China',]
-    boxplot(data[input$var], xlab=input$var, ylab = 'Count')
+    sel_var <- input$var
+    #boxplot(data[input$var], xlab=input$var, ylab = 'Count')
+    ggplot(data) + geom_boxplot(aes_string(y=sel_var))
   })
 }
 
