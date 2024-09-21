@@ -55,9 +55,7 @@ df <- read.csv("./Countries and death causes.csv", header = T, sep=",")
 ui <- fluidPage(
   
   # Application title
-  titlePanel("Boxplot for single death cause per country"),
-  
-  # Sidebar with a slider input for number of bins 
+  # titlePanel("Trend for single death cause per country"),
   sidebarLayout(
     sidebarPanel(
       selectInput(inputId = "con", label = "Choose country", choices = unique(df$Entity)),
@@ -70,14 +68,13 @@ ui <- fluidPage(
   )
 )
 
-# Define server logic required to draw a histogram
+# Define server logic required to draw a plot
 server <- function(input, output) {
   # Render the side-by-side histograms
   output$boxplot <- renderPlot({
-    data <- df[df['Entity']==input$con,] #df[df['Entity']=='China',]
+    #data <- df[df['Entity']==input$con,] #df[df['Entity']=='China',]
     sel_var <- input$var
-    #boxplot(data[input$var], xlab=input$var, ylab = 'Count')
-    ggplot(data) + geom_boxplot(aes_string(y=sel_var))
+    ggplot(df, aes_string(x ='Year', y=sel_var)) + geom_line(color='gray', size=1)
   })
 }
 
