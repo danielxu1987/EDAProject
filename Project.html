@@ -2403,7 +2403,8 @@ non-numerical data:</p>
 each year and each country/region. Some countries are counted together
 such as <em>G20, OECD Countries, South-East Asia Region</em> and
 <em>Western Passific Region</em>. Also, some measured variables look
-similar such as <em>Outdoor.air.pollution</em> and
+similar such as <em>Outdoor.air.pollution,
+Household.air.pollution.from.solid.fuels</em> and
 <em>Air.pollution</em>.</p>
 <p>Most variables have zero values. This indicates that either no one
 died of that specific cause in a country in a specific year, or they
@@ -2424,8 +2425,25 @@ snippet</code></pre>
 {"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Country"],"name":[1],"type":["chr"],"align":["left"]},{"label":["Code"],"name":[2],"type":["chr"],"align":["left"]},{"label":["Outdoor.air.pollution"],"name":[3],"type":["int"],"align":["right"]},{"label":["Child.wasting"],"name":[4],"type":["int"],"align":["right"]},{"label":["Smoking"],"name":[5],"type":["int"],"align":["right"]},{"label":["Drug.use"],"name":[6],"type":["int"],"align":["right"]}],"data":[{"1":"Afghanistan","2":"AFG","3":"5344","4":"19135","5":"7340","6":"463","_rn_":"21"},{"1":"Australia","2":"AUS","3":"1644","4":"130","5":"17852","6":"1880","_rn_":"321"},{"1":"Belgium","2":"BEL","3":"4983","4":"282","5":"19886","6":"784","_rn_":"561"},{"1":"Congo","2":"COG","3":"1188","4":"2222","5":"1006","6":"148","_rn_":"1251"},{"1":"Morocco","2":"MAR","3":"19524","4":"3262","5":"17038","6":"856","_rn_":"3891"},{"1":"Nigeria","2":"NGA","3":"47250","4":"262186","5":"16448","6":"10955","_rn_":"4191"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
-<p>Add a new chunk by clicking the <em>Insert Chunk</em> button on the
-toolbar or by pressing <em>Ctrl+Alt+I</em>.</p>
+</div>
+<div id="plotting-single-variables" class="section level2">
+<h2>Plotting single variables</h2>
+<div id="histogram" class="section level3">
+<h3>Histogram</h3>
+<p>First check the data range by histogram.</p>
+<div style="width: 100% ; height: 400px ; text-align: center; box-sizing: border-box; -moz-box-sizing: border-box; -webkit-box-sizing: border-box;" class="muted well">Shiny applications not supported in static R Markdown documents</div>
+<p>Variables that are linked to environment such as air and water
+quality tend to cause higher count of death (not unusual to have more
+than 10,000 deaths). This may prove that the long-term influence of a
+bad environment, which often sustains through a longer period, can kill
+many people living in that area/region.</p>
+<p>In contrast, causes such as <em>unsafe sex</em> and <em>durg use</em>
+generally lead to less casualities. These can be seen as individual’s
+habbit which do not have the massive impact in a whole community.</p>
+<p>Comparing country to country shows that people in developed countries
+generally suffer less from the environmental issues than those in
+developing countries.</p>
+</div>
 </div>
 
 
