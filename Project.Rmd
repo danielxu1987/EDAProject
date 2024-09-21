@@ -1,0 +1,72 @@
+---
+title: "EDA Project"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is the R Notebook for the project from Sifeng Xu, 24525844 for unit *CITS4009 Computation Data Analysis*. It demonstrates the process and findings of EDA based on the **Countries and Death Causes** dataset. 
+
+```{r setup, echo=FALSE}
+# Load  libraries
+library(shiny)
+library(shinyWidgets)
+library(ggplot2)
+library(gridExtra)
+library(knitr)
+
+# load dataset
+df <- read.csv("./Countries and death causes.csv",header = T, sep=",")
+
+```
+
+## Basic information of the data
+
+
+```{r glance, echo=TRUE}
+
+data.frame(
+  columeID = col(df)[1,],
+  variables = names(df),
+  class = sapply(df, typeof),
+  first_values = sapply(df, function(x) paste0(head(x), collapse = ', ')),
+  row.names = NULL) |>
+kable()
+
+summary(df) |> kable()
+
+head(df) |> kable()
+
+```
+
+
+A first glance of data shows 31 columns which consists of 3 non-numerical data:
+
+* countries' full name
+* short country code
+* year of measurements (1990-2019) 
+
+the rest is numerical data showing how many deaths from each cause, each year and each country/region. Some countries are counted together such as *G20, OECD Countries, South-East Asia Region* and *Western Passific Region*. Also, some measured variables look similar such as *Outdoor.air.pollution* and *Air.pollution*.  
+
+Most variables have zero values. This indicates that either no one died of that specific cause in a country in a specific year, or they were just missing values. Furthermore, there is no NA's in the dataset. 
+
+```{r nas, echo=TRUE} 
+print(sum(is.na(df)))
+
+```
+
+To give an impression what the dataset looks like, a snippet shows 6 countries and their deaths count from several causes in 2010.
+
+```{r snippet, echo=TRUE}
+df_2010 <- df[df['Year']==2010, 
+  c('Entity', 'Code', 'Outdoor.air.pollution','Child.wasting', 'Smoking', 'Drug.use')]
+countries <- c('Afghanistan', 'Morocco', 'Nigeria', 'Australia', 'Belgium', 'Congo')
+snippet <- subset(df_2010, Entity %in% countries)
+names(snippet)[1] <- 'Country'
+snippet
+```
+
+
+## Plotting single variables
+
+
