@@ -150,7 +150,7 @@ server <- function(input, output) {
 shinyApp(ui = ui, server = server)
 ```
 
-In boxplot, after choosing different countries, it is noticeable that developed countries have less mortality than developing countries from poor hygiene (e.g. water quality, unsafe sanitation and no access to handwashing facility). Two comparisons are drawn here between the *Uk* and *Tanzania*, as well as the *Netherlands* and *Cambodia*, which share similar population according to [Worldometers].(https://www.worldometers.info/world-population/population-by-country/)
+After comparing different countries with boxplot, it is noticeable that developed countries have less mortality than developing countries due to poor hygiene (e.g. water quality, unsafe sanitation and no access to handwashing facility). Two comparisons are drawn here between the *Uk* and *Tanzania*, as well as the *Netherlands* and *Cambodia*, which share similar population according to [Worldometers].(https://www.worldometers.info/world-population/population-by-country/)
 
 ```{r boxcompare, echo=FALSE}
 # Define UI for application that draws a histogram
@@ -162,7 +162,7 @@ ui <- fluidPage(
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-          selectInput(inputId = "var", label = "Choose death cause", choices = names(df[, -c(1:3)])),
+          selectInput(inputId = "var", label = "Choose death cause", choices = c('Unsafe.water.source', 'Unsafe.sanitation', 'No.access.to.handwashing.facility')),
         ),
         # Show a plot of the generated distribution
         mainPanel(
