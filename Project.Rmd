@@ -116,7 +116,7 @@ First check the data range by histogram. Variables that are linked to environmen
 ![Outdoor air pollution](./images/hist_single_oap.JPG)
 ![Household air pollution from solid fuels](./images/hist_single_hap.JPG)
 
-In contrast, causes such as *iron deficiency* and *vitamin A deficiency* lead to far less mortality worldwide. Probably lack of iron or vitamin A alone is not too critical to the survival of most people.
+In contrast, causes such as *iron deficiency* and *vitamin A deficiency* lead to far less mortalities worldwide. Probably lack of iron or vitamin A alone is not too critical to the survival of most people.
 
 ![Iron deficiency](./images/hist_single_iron.JPG)
 ![Vitamin A deficiency](./images/hist_single_va.JPG)
@@ -157,7 +157,7 @@ server <- function(input, output) {
 shinyApp(ui = ui, server = server)
 ```
 
-After comparing different countries with boxplot, it is noticeable that developed countries usually have less mortality than developing countries in causes related to poor hygiene (e.g. water quality, unsafe sanitation and no access to hand washing facility). 
+After comparing different countries with boxplot, it is noticeable that developed countries usually have less mortalities than developing countries in causes related to poor hygiene (e.g. water quality, unsafe sanitation and no access to hand washing facility). 
 
 ![Compare countries - unsafe water source](./images/box_water.JPG)
 
@@ -261,7 +261,7 @@ server <- function(input, output) {
 shinyApp(ui = ui, server = server)
 ```
 
-Line graph shows the trend of certain causes from 1990 to 2019. Comparison between countries shows interesting facts.  Alcohol use seems to be more detrimental to people's health in recent years in both developed and developing countries as was selected in previous section. 
+Line graph shows the trend of certain causes from 1990 to 2019. Comparison between countries shows interesting facts.  Alcohol use seems to be more detrimental to people's health in recent years in both developed and developing countries selected in previous section. 
 
 ![](./images/trend_alco.JPG)
 
@@ -283,7 +283,11 @@ When comparing multiple variables, it is clear that diet related death causes ar
 
 ![](./images/pair_diet_northa.JPG)
 
-```{r histdouble, echo=FALSE}
+Smooth curve and jittering points shows drug use and unsafe sex clustering when sex fatality value is low.  Once the value grows further they seemed less correlated.
+
+![](./images/smooth_sexdrug_lim.JPG)
+
+```{r histdouble, include=FALSE}
 ui <- fluidPage(
 
     # Application title
