@@ -73,8 +73,6 @@ print(snippet)
 ```
 
 
-## Plotting single variables
-
 ### Histogram for single death cause
 ```{r histsingle, include=FALSE}
 # Define UI for application that draws a histogram
@@ -118,7 +116,7 @@ First check the data range by histogram. Variables that are linked to environmen
 ![Outdoor air pollution](./images/hist_single_oap.JPG)
 ![Household air pollution from solid fuels](./images/hist_single_hap.JPG)
 
-In contrast, causes such as *iron deficiency* and *vitamin A deficiency* lead to far less mortality. Probably lack of iron or vitamin A alone is not too critical to the survival of most people.
+In contrast, causes such as *iron deficiency* and *vitamin A deficiency* lead to far less mortality worldwide. Probably lack of iron or vitamin A alone is not too critical to the survival of most people.
 
 ![Iron deficiency](./images/hist_single_iron.JPG)
 ![Vitamin A deficiency](./images/hist_single_va.JPG)
@@ -159,11 +157,17 @@ server <- function(input, output) {
 shinyApp(ui = ui, server = server)
 ```
 
-After comparing different countries with boxplot, it is noticeable that developed countries usually have less mortality than developing countries in causes related to poor hygiene (e.g. water quality, unsafe sanitation and no access to handwashing facility). 
+After comparing different countries with boxplot, it is noticeable that developed countries usually have less mortality than developing countries in causes related to poor hygiene (e.g. water quality, unsafe sanitation and no access to hand washing facility). 
 
-Two comparisons are drawn here between the *Uk* and *Tanzania*, as well as the *Netherlands* and *Cambodia*, which share similar population to each counterpart according to [Worldometers](https://www.worldometers.info/world-population/population-by-country/)
+![Compare countries - unsafe water source](./images/box_water.JPG)
 
-```{r boxcompare, echo=FALSE}
+![Compare countries - unsafe sanitation](./images/box_sani.JPG)
+
+![Compare countries - no access to handwashing facility](./images/box_handw.JPG)
+
+Two pairs of countries are selected here as examples between the *Uk* and *Tanzania*, as well as the *Netherlands* and *Cambodia*. The reason why they are compared to each other is because counties in each pair shares similar population according to [Worldometers](https://www.worldometers.info/world-population/population-by-country/).
+
+```{r boxcompare, include=FALSE}
 # Define UI for application that draws a histogram
 ui <- fluidPage(
 
@@ -208,8 +212,8 @@ server <- function(input, output) {
 shinyApp(ui = ui, server = server)
 ```
 
-### Trend single
-```{r linesingle, echo=FALSE}
+### Trend comparison
+```{r linesingle, include=FALSE}
 # Define UI for application that draws a histogram
 ui <- fluidPage(
 
@@ -217,7 +221,6 @@ ui <- fluidPage(
     # titlePanel("Trend for single death cause per country"),
     sidebarLayout(
         sidebarPanel(
-          selectInput(inputId = "con", label = "Choose country", choices = unique(df$Entity)),
           selectInput(inputId = "var", label = "Choose death cause", choices = names(df[, -c(1:3)])),
         ),
         # Show a plot of the generated distribution
@@ -232,9 +235,7 @@ server <- function(input, output) {
   # Render the side-by-side histograms
   output$trendline <- renderPlot({
     sel_var <- input$var
-    
-    rm(p1, p2, p3, p4)
-    
+   
     p1 <- ggplot(dataUK, aes_string(x ='Year', y=sel_var)) + 
       geom_line(color='gray', size=2) + 
       labs(title = 'UK')
@@ -260,8 +261,27 @@ server <- function(input, output) {
 shinyApp(ui = ui, server = server)
 ```
 
+Line graph shows the trend of certain causes from 1990 to 2019. Comparison between countries shows interesting facts.  Alcohol use seems to be more detrimental to people's health in recent years in both developed and developing countries as was selected in previous section. 
 
-### TODO - Multiple variables
+![](./images/trend_alco.JPG)
+
+On the other hand, outdoor air pollution appears to become less harmful in western Europe than in Africa or Asia. This may have to do with the progress of industrialisation which leads to air pollution. In other words, Europe was almost at the end of it around the turn of the century, and they paid more attention to the environmental impact. While certain areas in Africa and Asia just started to industrialize themselves. That is why the air quality got worse and worse in this period there.
+
+![](./images/trend_oap.JPG)
+
+### Bar chart
+
+Drug use seems to have serious impact in both rich and poor areas. In the figure below, far more people ended their life in India and the USA due to drug use than the whole African Region in 2010. European region is not much better as they ranked the third in this set of comparison worldwide.
+
+![](./images/Bar_compare_us.JPG)
+
+### Correlation between variables
+
+When comparing multiple variables, it is clear that diet related death causes are  positive linear for African region. This may indicate the food security issue in this area.  On the other hand, this correlation seems less obvious for North America where the general public have much more dietary options.
+
+![](./images/pair_diet_afr.JPG)
+
+![](./images/pair_diet_northa.JPG)
 
 ```{r histdouble, echo=FALSE}
 ui <- fluidPage(

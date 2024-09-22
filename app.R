@@ -11,12 +11,16 @@ library(knitr)
 # load dataset
 df <- read.csv("./Countries and death causes.csv", header = T, sep=",")
 
+dataUK <- df[df['Entity']=='United Kingdom',] #df[df['Entity']=='China',]
+dataTAN <- df[df['Entity']=='Tanzania',]
+dataNLD <- df[df['Entity']=='Netherlands',]
+dataCAM <- df[df['Entity']=='Cambodia',]
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
   
   # Application title
-  titlePanel("EDA for single and mult variables"),
+  titlePanel("EDA Project single-multi variables"),
   
   # Sidebar with a slider input
   sidebarLayout(
@@ -25,8 +29,10 @@ ui <- fluidPage(
         choices = c('hist_single',
                     'box_single',
                     'box_compare',
-                    "scatter",
+                    'trend_compare',
+                    'bar_compare',
                     "pairwise",
+                    "scatter",
                     "geom_bin2d",
                     "colorplot",
                     "jitter",
@@ -46,11 +52,27 @@ ui <- fluidPage(
         selectInput(inputId = "var", label = "Choose death cause", choices = names(df[, -c(1:3)]))
       ),
       conditionalPanel(
+        condition = "input.plot_type == 'box_compare'",
+        selectInput(inputId = "var", 
+          label = "Choose death cause", choices = c('Unsafe.water.source', 'Unsafe.sanitation', 'No.access.to.handwashing.facility')),
+      ),
+      conditionalPanel(
+        condition = "input.plot_type == 'trend_compare'",
+        selectInput(inputId = "var", label = "Choose death cause", choices = names(df[, -c(1:3)])),
+      ),
+      conditionalPanel(
+        condition = "input.plot_type == 'bar_compare'",
+        selectInput(inputId = "year", label = "Choose year", choices = unique(df$Year)),
+        selectInput(inputId = "var", label = "Choose death cause", choices = names(df[, -c(1:3)])),
+      ),
+      conditionalPanel(
         condition = "input.plot_type == 'pairwise'",
+        selectInput(inputId = "con", label = "Choose country", choices = unique(df$Entity)),
+        
         pickerInput(
           inputId = "selected_attributes",
           label = "Select attributes:",
-          choices = names(a),
+          choices = names(df[, -c(1:3)]),
           multiple = TRUE,
           options = list('actions-box' = TRUE)
         )
@@ -68,7 +90,7 @@ ui <- fluidPage(
     
     # Show a plot of the generated distribution
     mainPanel(
-      plotOutput("plot", height = '400px', width = '600px')
+      plotOutput("plot", height = '600px', width = '1000px')
     )
   )
 )
@@ -87,40 +109,87 @@ server <- function(input, output) {
       data <- df[df['Entity']==input$con,] #df[df['Entity']=='China',]
       boxplot(data[input$var], xlab=input$var, ylab = 'Count')
     }
+    else if (input$plot_type == 'box_compare'){
+      sel_var <- input$var
+      
+      p1 <- ggplot(dataUK) + geom_boxplot(aes_string(y=sel_var)) +
+        labs(x = input$var, y= 'Count', title = 'UK')
+      p2 <- ggplot(dataTAN) + geom_boxplot(aes_string(y=sel_var)) +
+        labs(x = input$var, y= 'Count', title = 'Tanzania')
+      p3 <- ggplot(dataNLD) + geom_boxplot(aes_string(y=sel_var)) +
+        labs(x = input$var, y= 'Count', title = 'Netherlands')
+      p4 <- ggplot(dataCAM) + geom_boxplot(aes_string(y=sel_var)) +
+        labs(x = input$var, y= 'Count', title = 'Cambodia')
+      
+      grid.arrange(p1, p2, p3, p4, nrow=2)
+    }
+    else if(input$plot_type == 'trend_compare'){
+      sel_var <- input$var
+      
+      p1 <- ggplot(dataUK, aes_string(x ='Year', y=sel_var)) + 
+        geom_line(color='gray', size=2) + 
+        labs(title = 'UK')
+      p2 <- ggplot(dataTAN, aes_string(x ='Year', y=sel_var)) + 
+        geom_line(color='gray', size=2) + 
+        labs(title = 'Tanzania')
+      p3 <- ggplot(dataNLD, aes_string(x ='Year', y=sel_var)) + 
+        geom_line(color='gray', size=2) + 
+        labs(title = 'Netherlands')
+      p4 <- ggplot(dataCAM, aes_string(x ='Year', y=sel_var)) + 
+        geom_line(color='gray', size=2) + 
+        labs(title = 'Cambodia')
+      
+      grid.arrange(p1, p2, p3, p4, nrow=2)
+    }
+    else if(input$plot_type == 'bar_compare'){
+      df_year <- df[df$Year==input$year,]
+      sam_year <- df_year[sample(nrow(df_year), 20), ]
+      # sel_var <- input$var
+      rr_trans <- transform(sam_year, Entity = reorder(Entity, Drug.use))
+      ggplot(rr_trans, aes(x = Entity, y = Drug.use)) +
+        geom_bar(stat = "identity", fill = 'red') + 
+        coord_flip()
+    }
     else if (input$plot_type == "pairwise") {
+      data <- df[df['Entity']==input$con,]
       selected_attrs <- input$selected_attributes
       if (length(selected_attrs) < 2) {
         return(NULL)
       }
-      pairs(a[, selected_attrs])
+      pairs(data[, selected_attrs], main = input$con)
       
-    } else if(input$plot_type == "scatter") {
+    } 
+    else if(input$plot_type == "scatter") {
       x_attr <- input$x_attr
       y_attr <- input$y_attr
       ggplot(a, aes_string(x = x_attr, y = y_attr)) +
         geom_point()+geom_smooth()
       
-    } else if(input$plot_type == "geom_bin2d"){
+    } 
+    else if(input$plot_type == "geom_bin2d"){
       x_attr <- input$x_attr
       y_attr <- input$y_attr
       alp <- input$alp
       ggplot(a, aes_string(x=x_attr, y=y_attr) ) +
         geom_bin2d(alpha=alp)
       
-    } else if(input$plot_type == "colorplot") {
+    } 
+    else if(input$plot_type == "colorplot") {
       ggplot(a, aes(x=residual.sugar, y=density, colour = quality.mod)) +
         geom_point(size=2.0) +
         #geom_point() +
         facet_wrap(~quality.mod, ncol = 3)
       # to separate scatter points in different graphs, 1 vector -> 2 dimensional
       
-    } else if(input$plot_type == "jitter") {
+    } 
+    else if(input$plot_type == "jitter") {
       ggplot(a, aes(x=residual.sugar, y=density, colour = quality.mod)) +
         geom_jitter(width=0.2, height=0, alpha=0.5) +
         facet_wrap(~quality.mod, ncol = 3)
       # to separate scatter points in different graphs, 1 vector -> 2 dimensional
       
-    } else if(input$plot_type == "hist_density"){
+    } 
+    else if(input$plot_type == "hist_density"){
       ggplot(a, aes(x=residual.sugar, y=..density..)) +
         geom_histogram(binwidth = 1) +
         geom_density(colour = "blue", alpha = 0.5)
@@ -131,18 +200,21 @@ server <- function(input, output) {
       # no extra param produces stacked bar chart,
       # to see distribution of values in categories
       
-    } else if(input$plot_type == "sidebysidebar") {
+    } 
+    else if(input$plot_type == "sidebysidebar") {
       ggplot(a, aes(x=density_new, fill = quality.mod)) +
         geom_bar(position = 'dodge')
       # 'dodge' produces side-by-side chart,
       # to compare count of values across categories
       
-    } else if(input$plot_type == "filledbar"){
+    } 
+    else if(input$plot_type == "filledbar"){
       ggplot(a, aes(x=density_new, fill = quality.mod)) +
         geom_bar(position = 'fill')
       # fill the whole column,
       # to see ratios of one value over the other value
-    } else if(input$plot_type == "overlayingbar"){
+    } 
+    else if(input$plot_type == "overlayingbar"){
       ggplot(a, aes(x=density_new, fill = quality.mod, alpha = 0.15)) +
         geom_bar(position='identity')
       # fill the whole column,
