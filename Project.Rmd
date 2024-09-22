@@ -2,7 +2,7 @@
 title: "EDA Project"
 output:
   html_document:
-    df_print: paged
+    # df_print: paged
 runtime: shiny
 ---
 
@@ -76,7 +76,7 @@ print(snippet)
 ## Plotting single variables
 
 ### Histogram for single death cause
-```{r histsingle, echo=FALSE}
+```{r histsingle, include=FALSE}
 # Define UI for application that draws a histogram
 ui <- fluidPage(
 
@@ -113,11 +113,17 @@ shinyApp(ui = ui, server = server)
 ```
 
 
-First check the data range by histogram. Variables that are linked to environment such as air and water quality tend to cause higher count of death (not unusual to have more than 10,000 deaths). This may prove that the long-term influence of a bad environment, which often sustains through a longer period, can kill many people living in that area/region. 
+First check the data range by histogram. Variables that are linked to environment such as outdoor and household air quality tend to cause more deaths. This may prove that the long-term influence of poor air quality, which often sustains through a longer period, can kill many people living in that area/region.
 
-In contrast, causes such as *unsafe sex, durg use* and *alcohol use* generally lead to less mortality. These can be seen as individual's habit which do not have the massive impact in the whole community. 
+![Outdoor air pollution](./images/hist_single_oap.JPG)
+![Household air pollution from solid fuels](./images/hist_single_hap.JPG)
 
-Across all variables, high value of mortality does not appear often as most values seem to stay close to the lower boundary (a spike near zero).
+In contrast, causes such as *iron deficiency* and *vitamin A deficiency* lead to far less mortality. Probably lack of iron or vitamin A alone is not too critical to the survival of most people.
+
+![Iron deficiency](./images/hist_single_iron.JPG)
+![Vitamin A deficiency](./images/hist_single_va.JPG)
+
+Across all variables, a fact is that high value of mortality does not appear often as most values seem to stay close to the lower boundary. Note a spike near zero for all example figures.
 
 ### Boxplot single
 ```{r boxsingle, include=FALSE}

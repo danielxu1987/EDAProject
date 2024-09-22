@@ -12,116 +12,147 @@ library(knitr)
 df <- read.csv("./Countries and death causes.csv", header = T, sep=",")
 
 
-### Single histogram
-
-# # Define UI for application that draws a histogram
-# ui <- fluidPage(
-#   
-#   # Application title
-#   titlePanel("Histgram for single variable"),
-#   
-#   # Sidebar with a slider input for number of bins 
-#   sidebarLayout(
-#     sidebarPanel(
-#       # selectInput(inputId = "con", label = "Choose country", choices = unique(df$Entity)),
-#       selectInput(inputId = "x", label = "Choose death cause", choices = names(df[, -c(1:3)])),
-#       # selectInput(inputId = "var2", label = "Choose death cause2", choices = names(df[, -c(1:3)]))
-#     ),
-#     # Show a plot of the generated distribution
-#     mainPanel(
-#       plotOutput("histogram")
-#     )
-#   )
-# )
-# 
-# # Define server logic required to draw a histogram
-# server <- function(input, output) {
-#   generate_histogram <- function(data, var, title) {
-#     ggplot(data) +
-#       geom_histogram(aes_string(x = var), bins = 40, fill = "gray") +
-#       labs(title = title, x = var, y = "Frequency", subtitle = 'Frequency per cause for all countries')
-#   }
-#   # Render the side-by-side histograms
-#   output$histogram <- renderPlot({
-#     generate_histogram(df, input$x, colnames(input$var))
-#   })
-# }
-
-# # Run the application 
-# shinyApp(ui = ui, server = server)
-
-##Single boxplot
 # Define UI for application that draws a histogram
 ui <- fluidPage(
   
   # Application title
-  # titlePanel("Trend for single death cause per country"),
+  titlePanel("EDA for single and mult variables"),
+  
+  # Sidebar with a slider input
   sidebarLayout(
     sidebarPanel(
-      selectInput(inputId = "con", label = "Choose country", choices = unique(df$Entity)),
-      selectInput(inputId = "var", label = "Choose death cause", choices = names(df[, -c(1:3)])),
+      selectInput("plot_type", "Select plot type:",
+        choices = c('hist_single',
+                    'box_single',
+                    'box_compare',
+                    "scatter",
+                    "pairwise",
+                    "geom_bin2d",
+                    "colorplot",
+                    "jitter",
+                    "hist_density",
+                    "stackedbar",
+                    "sidebysidebar",
+                    "filledbar",
+                    "overlayingbar"
+      )),
+      conditionalPanel(
+        condition = "input.plot_type == 'hist_single'",
+        selectInput(inputId = "var", label = "Choose death cause", choices = names(df[, -c(1:3)]))
+      ),
+      conditionalPanel(
+        condition = "input.plot_type == 'box_single'",
+        selectInput(inputId = "con", label = "Choose country", choices = unique(df$Entity)),
+        selectInput(inputId = "var", label = "Choose death cause", choices = names(df[, -c(1:3)]))
+      ),
+      conditionalPanel(
+        condition = "input.plot_type == 'pairwise'",
+        pickerInput(
+          inputId = "selected_attributes",
+          label = "Select attributes:",
+          choices = names(a),
+          multiple = TRUE,
+          options = list('actions-box' = TRUE)
+        )
+      ),
+      conditionalPanel(
+        condition = "input.plot_type == 'scatter'",
+        selectInput("x_attr", "Select x-axis attribute:", names(a)),
+        selectInput("y_attr", "Select y-axis attribute:", names(a))
+      ),
+      conditionalPanel(
+        condition = "input.plot_type == 'geom_bin2d'",
+        sliderInput('alp', 'Transparency', min = 0.1, max = 1.0, value = 0.35)
+      )
     ),
+    
     # Show a plot of the generated distribution
     mainPanel(
-      plotOutput("boxplot")
+      plotOutput("plot", height = '400px', width = '600px')
     )
   )
 )
 
-# Define server logic required to draw a plot
+# Define server logic required to draw a histogram
 server <- function(input, output) {
-  # Render the side-by-side histograms
-  output$boxplot <- renderPlot({
-    #data <- df[df['Entity']==input$con,] #df[df['Entity']=='China',]
-    sel_var <- input$var
-    ggplot(df, aes_string(x ='Year', y=sel_var)) + geom_line(color='gray', size=1)
+  
+  # in the server:
+  output$plot <- renderPlot({
+    if(input$plot_type == "hist_single"){
+      ggplot(df) +
+        geom_histogram(aes_string(x = input$var), bins = 40, fill = "gray") +
+        labs(x = input$var, y = "Frequency", subtitle = 'Frequency per cause for all countries')
+    }
+    else if (input$plot_type == "box_single"){
+      data <- df[df['Entity']==input$con,] #df[df['Entity']=='China',]
+      boxplot(data[input$var], xlab=input$var, ylab = 'Count')
+    }
+    else if (input$plot_type == "pairwise") {
+      selected_attrs <- input$selected_attributes
+      if (length(selected_attrs) < 2) {
+        return(NULL)
+      }
+      pairs(a[, selected_attrs])
+      
+    } else if(input$plot_type == "scatter") {
+      x_attr <- input$x_attr
+      y_attr <- input$y_attr
+      ggplot(a, aes_string(x = x_attr, y = y_attr)) +
+        geom_point()+geom_smooth()
+      
+    } else if(input$plot_type == "geom_bin2d"){
+      x_attr <- input$x_attr
+      y_attr <- input$y_attr
+      alp <- input$alp
+      ggplot(a, aes_string(x=x_attr, y=y_attr) ) +
+        geom_bin2d(alpha=alp)
+      
+    } else if(input$plot_type == "colorplot") {
+      ggplot(a, aes(x=residual.sugar, y=density, colour = quality.mod)) +
+        geom_point(size=2.0) +
+        #geom_point() +
+        facet_wrap(~quality.mod, ncol = 3)
+      # to separate scatter points in different graphs, 1 vector -> 2 dimensional
+      
+    } else if(input$plot_type == "jitter") {
+      ggplot(a, aes(x=residual.sugar, y=density, colour = quality.mod)) +
+        geom_jitter(width=0.2, height=0, alpha=0.5) +
+        facet_wrap(~quality.mod, ncol = 3)
+      # to separate scatter points in different graphs, 1 vector -> 2 dimensional
+      
+    } else if(input$plot_type == "hist_density"){
+      ggplot(a, aes(x=residual.sugar, y=..density..)) +
+        geom_histogram(binwidth = 1) +
+        geom_density(colour = "blue", alpha = 0.5)
+    }
+    else if(input$plot_type == "stackedbar") {
+      ggplot(a, aes(x=density_new, fill = quality.mod)) +
+        geom_bar()
+      # no extra param produces stacked bar chart,
+      # to see distribution of values in categories
+      
+    } else if(input$plot_type == "sidebysidebar") {
+      ggplot(a, aes(x=density_new, fill = quality.mod)) +
+        geom_bar(position = 'dodge')
+      # 'dodge' produces side-by-side chart,
+      # to compare count of values across categories
+      
+    } else if(input$plot_type == "filledbar"){
+      ggplot(a, aes(x=density_new, fill = quality.mod)) +
+        geom_bar(position = 'fill')
+      # fill the whole column,
+      # to see ratios of one value over the other value
+    } else if(input$plot_type == "overlayingbar"){
+      ggplot(a, aes(x=density_new, fill = quality.mod, alpha = 0.15)) +
+        geom_bar(position='identity')
+      # fill the whole column,
+      # to see ratios of one value over the other value
+    }
   })
 }
 
-# Run the application 
+
+
+# Run the application
 shinyApp(ui = ui, server = server)
 
-# ## Two variables histogram
-# # Define UI for application that draws a histogram
-# ui <- fluidPage(
-#   
-#   # Application title
-#   titlePanel("EDA for single variable"),
-#   
-#   # Sidebar with a slider input for number of bins 
-#   sidebarLayout(
-#     sidebarPanel(
-#       selectInput(inputId = "con", label = "Choose country", choices = unique(df$Entity)),
-#       selectInput(inputId = "var1", label = "Choose death cause1", choices = names(df[, -c(1:3)])),
-#       selectInput(inputId = "var2", label = "Choose death cause2", choices = names(df[, -c(1:3)]))
-#     ),
-#     # Show a plot of the generated distribution
-#     mainPanel(
-#       plotOutput("histogram")
-#     )
-#   )
-# )
-# 
-# # Define server logic required to draw a histogram
-# server <- function(input, output) {
-#   generate_histogram <- function(data, con, x_var1, x_var2, title) {
-#     data <- data[data$Entity == con,]
-#     
-#     p1 <- ggplot(data, aes_string(x = x_var1)) +
-#       geom_histogram(bins = 20, fill = "gray") +
-#       labs(title = title, x = x_var1, y = "Frequency", subtitle = 'Frequency per cause per country')
-#     
-#     p2 <- ggplot(data, aes_string(x = x_var2)) +
-#       geom_histogram(bins = 20, fill = "gray") +
-#       labs(title = title, x = x_var2, y = "Frequency", subtitle = 'Frequency per cause per country')
-#     
-#     grid.arrange(p1, p2, nrow = 1)
-#   }
-#   # Render the side-by-side histograms
-#   output$histogram <- renderPlot({
-#     generate_histogram(df, input$con, input$var1, input$var2, colnames(input$var))
-#   })
-# }
-# 
-# # Run the application 
-# shinyApp(ui = ui, server = server)
