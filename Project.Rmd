@@ -54,12 +54,6 @@ A first glance of data shows 31 columns which consists of 3 non-numerical data:
 
 the rest is numerical data showing how many deaths from each cause, each year and each country/region. Some countries are counted together such as *G20, OECD Countries, South-East Asia Region* and *Western Passific Region*. Also, some measured variables look similar such as *Outdoor.air.pollution, Household.air.pollution.from.solid.fuels* and *Air.pollution*.  
 
-Most variables have zero values. This indicates that either no one died of that specific cause in a country in a specific year, or they were just missing values. Furthermore, there is no NA's in the dataset. 
-
-```{r nas, echo=TRUE} 
-print(sum(is.na(df)))
-
-```
 
 To give an impression what the dataset looks like, a snippet shows 6 countries and their deaths count from several causes in 2010.
 
@@ -332,4 +326,35 @@ server <- function(input, output) {
 shinyApp(ui = ui, server = server)
 ```
 
+### Missing values and anomolies
 
+Currently there is no NA's in the dataset. Actually most variables have zero values as shown in summary. This indicates that either no one died of that specific cause in a country in a specific year, which can happen sometimes, or they were just missing values. Furthermore, there are 690 negative values which obviously do not make sense.
+
+```{r nas, echo=TRUE} 
+print(sum(is.na(df)))
+
+print(sum(df < 0))
+
+print(sum(df == 0))
+```
+
+My guess is that these zero's are missing values. Therefore it is good to explicitly indicate it by converting them to NA's, as well as negative values.
+
+```{r zeros, echo=TRUE}
+df_has_nas <- df
+num_vars <- names(df[, -c(1:3)])
+df_has_nas[names(df_has_nas) %in% num_vars][df_has_nas[names(df_has_nas) %in% num_vars] <= 0] <- NA # only replace zeros in the numerical variables, excluding year, country and code
+print(sum(is.na(df_has_nas)))
+```
+
+It is good to know which columns have missing values, as well as which columns are more impacted than others.
+
+```{r nacount, echo=TRUE}
+count_missing <- function(data){
+  sapply(data, FUN = function(col) sum(is.na(col)))
+}
+
+nacounts <- count_missing(df_has_nas)
+hasNA = which(nacounts>0)
+print(sort(nacounts[hasNA], decreasing = TRUE))
+```
