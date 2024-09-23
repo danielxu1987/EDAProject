@@ -18,6 +18,11 @@ dataCAM <- df[df['Entity']=='Cambodia',]
 
 num_vars <- sort(names(df[, -c(1:3)]))
 countries <- unique(df$Entity)
+years <- 1990:2019
+
+df_has_nas <- df
+df_has_nas[names(df_has_nas) %in% num_vars][df_has_nas[names(df_has_nas) %in% num_vars] <= 0]
+
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -47,11 +52,12 @@ ui <- fluidPage(
       )),
       conditionalPanel(
         condition = "input.plot_type == 'hist_single'",
+        selectInput(inputId = "year", label = "Choose year", choices = c('All', years)),
         selectInput(inputId = "var", label = "Choose death cause", choices = num_vars)
       ),
       conditionalPanel(
         condition = "input.plot_type == 'box_single'",
-        selectInput(inputId = "con", label = "Choose country", choices = countries),
+        selectInput(inputId = "con", label = "Choose country", choices = c('All', countries)),
         selectInput(inputId = "var", label = "Choose death cause", choices = num_vars)
       ),
       conditionalPanel(
@@ -108,12 +114,23 @@ server <- function(input, output) {
   # in the server:
   output$plot <- renderPlot({
     if(input$plot_type == "hist_single"){
-      ggplot(df) +
+      data <- data.frame()
+      if(input$year == 'All')
+        data <- df
+      else
+        data <- df[df['Year']==input$year,] 
+      
+      ggplot(data) +
         geom_histogram(aes_string(x = input$var), bins = 40, fill = "gray") +
         labs(x = input$var, y = "Frequency", subtitle = 'Frequency per cause for all countries')
     }
     else if (input$plot_type == "box_single"){
-      data <- df[df['Entity']==input$con,] #df[df['Entity']=='China',]
+      data <- data.frame()
+      if(input$con == 'All')
+        data <- df
+      else
+        data <- df[df['Entity']==input$con,] 
+      
       boxplot(data[input$var], xlab=input$var, ylab = 'Count')
     }
     else if (input$plot_type == 'box_compare'){
