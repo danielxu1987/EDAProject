@@ -328,33 +328,26 @@ shinyApp(ui = ui, server = server)
 
 ### Missing values and anomolies
 
-Currently there is no NA's in the dataset. Actually most variables have zero values as shown in summary. This indicates that either no one died of that specific cause in a country in a specific year, which can happen sometimes, or they were just missing values. Furthermore, there are 690 negative values which obviously do not make sense.
+Three values are checked in all numerical variables.  *NA, zeros* and *negative numbers*. 
 
 ```{r nas, echo=TRUE} 
-print(sum(is.na(df)))
 
-print(sum(df < 0))
+df_num <- df[, -c(1:3)]
 
-print(sum(df == 0))
+print(sum(is.na(df_num)))
+
+print(sum(df_num < 0))
+
+print(sum(df_num == 0))
 ```
 
-My guess is that these zero's are missing values. Therefore it is good to explicitly indicate it by converting them to NA's, as well as negative values.
+Currently there is no NA's in the dataset, neither are there any negative values. Zero may indicate that either no one died of that specific cause in a country in a specific year, or they were missing values. Although it is possible to treat zero's as missing values and replace them with e.g. median or mean, doing this will overwrite all the true zero's which are reflecting no death.  Therefore, in this exploration attempt I will keep zero's as-is.
 
-```{r zeros, echo=TRUE}
-df_has_nas <- df
-num_vars <- names(df[, -c(1:3)])
-df_has_nas[names(df_has_nas) %in% num_vars][df_has_nas[names(df_has_nas) %in% num_vars] <= 0] <- NA # only replace zeros in the numerical variables, excluding year, country and code
-print(sum(is.na(df_has_nas)))
+```{r zeros, include=TRUE}
 ```
 
 It is good to know which columns have missing values, as well as which columns are more impacted than others.
 
-```{r nacount, echo=TRUE}
-count_missing <- function(data){
-  sapply(data, FUN = function(col) sum(is.na(col)))
-}
 
-nacounts <- count_missing(df_has_nas)
-hasNA = which(nacounts>0)
-print(sort(nacounts[hasNA], decreasing = TRUE))
-```
+### Classficatioin 
+

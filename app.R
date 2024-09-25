@@ -20,9 +20,8 @@ num_vars <- sort(names(df[, -c(1:3)]))
 countries <- unique(df$Entity)
 years <- 1990:2019
 
-df_has_nas <- df
-df_has_nas[names(df_has_nas) %in% num_vars][df_has_nas[names(df_has_nas) %in% num_vars] <= 0]
-
+# df_has_nas <- df
+# df_has_nas[names(df_has_nas) %in% num_vars][df_has_nas[names(df_has_nas) %in% num_vars] < 0]
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
