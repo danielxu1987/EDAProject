@@ -15,14 +15,42 @@ library(shinyWidgets)
 library(ggplot2)
 library(gridExtra)
 library(knitr)
+library(dplyr)
 
 # load dataset
 df <- read.csv("./Countries and death causes.csv",header = T, sep=",")
+
+numericVars <- sort(names(df[, -c(1:3)]))
+df_num <- df[numericVars]
+
+dietFeatureVars <- c('Diet.low.in.whole.grains', 'Diet.low.in.fruits', 'Diet.low.in.Vegetables', 'Diet.low.in.nuts.and.seeds')
+dietTargetVar <- c('Diet.high.in.sodium')
 
 dataUK <- df[df['Entity']=='United Kingdom',] #df[df['Entity']=='China',]
 dataTAN <- df[df['Entity']=='Tanzania',]
 dataNLD <- df[df['Entity']=='Netherlands',]
 dataCAM <- df[df['Entity']=='Cambodia',]
+
+# count_strange() <- function(data, strange){
+#   if(strange == 'na'){
+#     sapply(data, FUN=function(col) sum(is.na(col)))
+#   }
+#   else if (strange == 'null'){
+#     sapply(data, FUN=function(col) sum(is.null(col)))
+#   }
+#   else if (strange == 'zero'){
+#     sapply(data, FUN=function(col) sum(col == 0))
+#   }
+#   else if (strange == 'negative'){
+#     sapply(data, FUN=function(col) sum(col < 0))
+#   }
+# }
+# 
+# strange_cols <- function(data, strange){
+#   counts <- count_strange(data, strange)
+#   hasStrange = which(counts > 0)
+#   counts[hasStrange]
+# }
 
 ```
 
@@ -328,26 +356,139 @@ shinyApp(ui = ui, server = server)
 
 ### Missing values and anomolies
 
-Three values are checked in all numerical variables.  *NA, zeros* and *negative numbers*. 
+These values are checked in all numerical variables: *NA, null, zeros* and *negative numbers*. 
 
 ```{r nas, echo=TRUE} 
 
-df_num <- df[, -c(1:3)]
+df_num <- df[, -c(1:3)] # get only numerical variables
 
 print(sum(is.na(df_num)))
+
+print(sum(is.null(df_num)))
 
 print(sum(df_num < 0))
 
 print(sum(df_num == 0))
 ```
 
-Currently there is no NA's in the dataset, neither are there any negative values. Zero may indicate that either no one died of that specific cause in a country in a specific year, or they were missing values. Although it is possible to treat zero's as missing values and replace them with e.g. median or mean, doing this will overwrite all the true zero's which are reflecting no death.  Therefore, in this exploration attempt I will keep zero's as-is.
-
-```{r zeros, include=TRUE}
-```
-
-It is good to know which columns have missing values, as well as which columns are more impacted than others.
+Currently there is no NA's in the dataset, neither are there any negative values. Zero may indicate that either no one died of that specific cause in a country in a specific year, or they were missing values. Although it is possible to treat zero's as missing values and replace them with e.g. median or mean, doing this will overwrite all the zero's which are truly reflecting zero mortality.  Therefore, in this exploration attempt we will keep zero's as-is.
 
 
 ### Classficatioin 
+
+In the pairwise scatterplot it was clear that several diet related causes has linear relation, although the correction is strong for some regions than others. Therefore we would like to explore here from classification perspective which variable is the best to predict *Diet.high.in.sodium* which will be our target variable. 
+
+The feature variables are *Diet.low.in.fruit* and *Diet.low.in.vegetables*. We will create a rate where it counts the percentage of death from that specific cause, with respect to the total death count from all causes in that row. The goal is to see when both feature variables are over their median rate, whether the target variable will also be over its own median.
+
+```{r addCat, echo=TRUE}
+df_v2 <- df_num
+df_v2$total.mortality <- rowSums(df_v2)
+
+df_v2 <- df_v2 |>
+  mutate(
+    # fruit.rate = (Diet.low.in.fruits/total.mortality),
+    # vege.rate = (Diet.low.in.Vegetables/total.mortality),
+    sodium.rate = (Diet.high.in.sodium/total.mortality)
+    ) |>
+  mutate(
+    # fruit.over.median = (fruit.rate > median(fruit.rate)), # indicate if death count of low fruit consumption is over its median
+    # vege.over.median = (vege.rate > median(vege.rate)), # indicate if death count of low vegetable consumption is over its median
+    sodium.over.median = (sodium.rate > median(sodium.rate)) # flag if death count of high sodium consumption is over its median
+  )
+```
+
+Now it is time to separate the data into training (81%), calibration(9%) and test (10%) data.
+
+```{r get_train_cal_test, echo=TRUE}
+pos <- TRUE # positive value indicator
+d <- df_v2
+set.seed(729375)
+d$rgroup <- runif(dim(d)[1])
+dTrainAll <- subset(d, rgroup<=0.9)
+dTest <- subset(d, rgroup>0.9)
+outcome <- c('sodium.over.median')
+# names of columns that are categorical type and numerical type
+vars <- setdiff(colnames(dTrainAll), c(outcome, 'rgroup'))
+catVars <- vars[sapply(dTrainAll[, vars], class) %in% c('factor', 'character')]
+
+# split dTrainAll into a training set and a validation (or calibration) set
+useForCal <- rbinom(n=dim(dTrainAll)[1], size=1, prob=0.1)>0
+dCal <- subset(dTrainAll, useForCal)
+dTrain <- subset(dTrainAll, !useForCal)
+
+print(dim(dTrain))
+
+print(dim(dCal))
+
+print(dim(dTest))
+
+```
+
+The next step is to process the numerical variables. Iterate through them all and see which variable has the best prediction chance.
+
+```{r single_var_compare, echo=TRUE}
+# perform single variable prediction for a given categorical column
+mkPredC <- function(outCol, varCol, appCol) {
+  pPos <- sum(outCol==pos)/length(outCol)
+  naTab <- table(as.factor(outCol[is.na(varCol)]))
+  pPosWna <- (naTab/sum(naTab))[pos]
+  vTab <- table(as.factor(outCol), varCol)
+  pPosWv <- (vTab[pos,]+1.0e-3*pPos)/(colSums(vTab)+1.0e-3)
+  pred <- pPosWv[appCol]
+  pred[is.na(appCol)] <- pPosWna
+  pred[is.na(pred)] <- pPos
+  pred
+}
+
+# for numerical variables, we convert them into categorical one and
+# call the `mkPredC` function above.
+mkPredN <- function(outCol, varCol, appCol) {
+  cuts <- unique(as.numeric(
+    quantile(varCol, probs=seq(0, 1, 0.1), na.rm=T)))
+  varC <- cut(varCol, cuts)
+  appC <- cut(appCol, cuts)
+  mkPredC(outCol, varC, appC)
+}
+
+# now go through all the diet related numerical variables in the `numericVars` vector
+# and perform the predictions. Again, the outputs are stored back into
+# the data frame.
+for (v in dietFeatureVars) {
+  pi <- paste('pred', v, sep='')
+  dTrain[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
+  dTest[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTest[,v])
+  dCal[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dCal[,v])
+}
+
+calcAUC <- function(ypred, ytrue) {
+    perf <- performance(prediction(ypred, ytrue), 'auc')
+    as.numeric(perf@y.values)
+}
+
+# Define a function to compute log likelihood so that we can reuse it.
+logLikelihood <- function(ypred, ytrue) {
+  sum(ifelse(ytrue, log(ypred), log(1-ypred)), na.rm=T)
+}
+
+# Compute the likelihood of the Null model on the calibration
+# set (for the KDD dataset from previous lecture)
+logNull <- logLikelihood(sum(dCal[,outcome]==pos)/nrow(dCal), dCal[,outcome]==pos)
+
+cat("The log likelihood of the Null model is:", logNull)
+
+## The log likelihood of the Null model is: -1178.017
+
+# selNumVars is a vector that keeps the names of the top performing numerical variables.
+selNumVars <- c()
+minDrop <- 10  # may need to adjust this number
+for (v in dietFeatureVars) {
+  pi <- paste('pred', v, sep='')
+  devDrop <- 2*(logLikelihood(dCal[,pi], dCal[,outcome]==pos) - logNull)
+  if (devDrop >= minDrop) {
+    cat(sprintf("%6s, deviance reduction: %g\n", v, devDrop))
+    selNumVars <- c(selNumVars, pi)
+  }
+}
+
+```
 
