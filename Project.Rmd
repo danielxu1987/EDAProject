@@ -516,7 +516,6 @@ cat("The log likelihood of the Null model is:", logNull)
 
 ## The log likelihood of the Null model is -424.2028
 
-
 # selCatVars is a vector that keeps the names of the top performing categorical variables.
 selCatVars <- c()
 minDrop <- 0.5  # may need to adjust this number
@@ -532,6 +531,9 @@ for (v in catVars) {
 }
 
 cat('Selected variables are ', catVars, sep = ', ')
+
+devDrop <- 2*(logLikelihood(dCal[,outcome], dCal[,outcome]==pos) - logNull)
+cat(sprintf("%6s, deviance reduction of ground truth is: %g\n", outcome, devDrop))
 
 ```
 
