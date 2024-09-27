@@ -162,3 +162,13 @@ for (v in selVars) {
   cat(sprintf("Variable %6s: AUC = %g\n", orig_v, calcAUC(dTest[,v], dTest[,outcome]==pos)))
 }
 
+for(v in catVars) {
+  pi <- paste('pred.', v, sep='')
+  aucTrain <- calcAUC(dTrain[,pi], dTrain[,outcome])
+  if (aucTrain >= 0.5) {
+    aucCal <- calcAUC(dCal[,pi], dCal[,outcome])
+    print(sprintf(
+      "%s: trainAUC: %4.3f; calibrationAUC: %4.3f",
+      pi, aucTrain, aucCal))
+  }
+}

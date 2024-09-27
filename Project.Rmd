@@ -16,7 +16,7 @@ library(ggplot2)
 library(gridExtra)
 library(knitr)
 library(dplyr)
-library(ROCR)
+
 
 # load dataset
 df_original <- read.csv("./Countries and death causes.csv",header = T, sep=",")
@@ -475,7 +475,7 @@ print(dim(dTest))
 
 ```
 
-The next step is to iterate through the generated True/False diet related variables and see which one has the best prediction chance.
+The next step is to iterate through the generated True/False diet related variables and see which one has the best prediction chance. Anything that is selected should help predict the result better than a null model. Therefore LogNull, the log likelihood of null model, is used as a selection criteria. Only variables that can create better deviance reduction than the null model are printed in the result. The same threshold holds for both numerical and categorical variables.
 
 ```{r single_var_compare, echo=TRUE, warning=FALSE}
 mkPredC <- function(outCol, varCol, appCol) {
@@ -523,13 +523,12 @@ for (v in catVars) {
     selCatVars <- c(selCatVars, pi)
   }
 }
-# 
-# cat('Selected variables are ', catVars, sep = ', ')
 
 devDrop <- 2*(logLikelihood(dCal[,outcome], dCal[,outcome]==pos) - logNull)
 cat(sprintf("%6s, deviance reduction of ground truth is: %g\n", outcome, devDrop))
 
 ```
+
 Now use all numerical variables for prediction and see which one performs the best to predict contribution of death from `r outcome`.
 
 ```{r selnumVar, echo=TRUE, warning=FALSE}
@@ -537,7 +536,7 @@ Now use all numerical variables for prediction and see which one performs the be
 rateVars <- grep("\\.rate$", numericVars, value = TRUE)
 
 # for numerical variables, we convert them into categorical one and
-# call the `mkPredC` function above.
+# call the `mkPredC` function
 mkPredN <- function(outCol, varCol, appCol) {
   cuts <- unique(as.numeric(
     quantile(varCol, probs=seq(0, 1, 0.1), na.rm=T)))
@@ -546,9 +545,7 @@ mkPredN <- function(outCol, varCol, appCol) {
   mkPredC(outCol, varC, appC)
 }
 
-# now go through all the diet related numerical variables in the `numericVars` vector
-# and perform the predictions. Again, the outputs are stored back into
-# the data frame.
+# now go through all the diet related numerical variables in the `numericVars` vector and perform the predictions. Again, the outputs are stored back into the data frame.
 for (v in rateVars) {
   pi <- paste('pred.', v, sep='')
   dTrain[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
@@ -556,12 +553,8 @@ for (v in rateVars) {
   dCal[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dCal[,v])
 }
 
-
-# fruit.over.median, deviance reduction: 0.501294
-
 # selNumVars is a vector that keeps the names of the top performing numerical variables.
 selNumVars <- c()
-#minDrop <- 0  # may need to adjust this number
 
 for (v in rateVars) {
   pi <- paste('pred.', v, sep='')
@@ -572,6 +565,12 @@ for (v in rateVars) {
   }
 }
 
+```
+
+Now that both types of variables are shortlisted, let us see how it performs using AUC in calibration and test dataset.
+
+```{r evaluate, echo=TRUE}
+library(ROCR)
 calcAUC <- function(ypred, ytrue) {
   perf <- performance(prediction(ypred, ytrue), 'auc')
   as.numeric(perf@y.values)
@@ -580,14 +579,21 @@ calcAUC <- function(ypred, ytrue) {
 selVars <- c(selCatVars, selNumVars)
 
 ## Performance of the top performing single variables on the test set:
-for (v in selVars) {
-  # retrieve the original variable name (character location 5 onward)
-  orig_v <- substring(v, 5)
-  auc <- calcAUC(dTest[,v], dTest[,outcome]==pos)
-  if(auc > 0.5){
-    cat(sprintf("Variable %6s: AUC = %g\n", orig_v, auc))
+for(v in selVars) {
+  pi <- v
+  aucTrain <- calcAUC(dTrain[,pi], dTrain[,outcome])
+  if (aucTrain >= 0.5) {
+    aucCal <- calcAUC(dCal[,pi], dCal[,outcome])
+    print(sprintf(
+      "%s: trainAUC: %4.3f; calibrationAUC: %4.3f",
+      pi, aucTrain, aucCal))
   }
 }
 
 ```
 
+In the result, all diet related variables perform poorly as they only have 50% chance of getting True or False. That is not better than a random guessing. iI the meantime, three variables seem to be most helpful, although their AUC values are not high (0.8+) either: 
+
+- pred.**Unsafe.sanitation**.rate: trainAUC: 0.551; calibrationAUC: 0.530
+- pred.**Diet.low.in.nuts.and.seeds**.rate: trainAUC: 0.515; calibrationAUC: 0.549
+- pred.**Non.exclusive.breastfeeding**.rate: trainAUC: 0.506; calibrationAUC: 0.514
