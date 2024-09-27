@@ -1,19 +1,17 @@
 ---
 title: "EDA Project"
 output:
-  html_document:
-    #df_print: paged
-runtime: shiny
+  html_document: default
 ---
 
 This is the R Notebook for the project from Sifeng Xu, 24525844 for unit *CITS4009 Computation Data Analysis*. It demonstrates the process and findings of EDA based on the **Countries and Death Causes** dataset. 
 
 ```{r setup, echo=FALSE}
 # Load  libraries
-library(shiny)
-library(shinyWidgets)
-library(ggplot2)
-library(gridExtra)
+# library(shiny)
+# library(shinyWidgets)
+# library(ggplot2)
+# library(gridExtra)
 library(knitr)
 library(dplyr)
 
@@ -104,42 +102,6 @@ print(snippet)
 
 
 ### Histogram for single death cause
-```{r histsingle, include=FALSE}
-# Define UI for application that draws a histogram
-ui <- fluidPage(
-
-    # Application title
-    # titlePanel("Histgram for single death cause"),
-
-    # Sidebar with a slider input for number of bins 
-    sidebarLayout(
-        sidebarPanel(
-          selectInput(inputId = "x", label = "Choose death cause", choices = names(df[, -c(1:3)]))
-        ),
-        # Show a plot of the generated distribution
-        mainPanel(
-           plotOutput("histogram")
-        )
-    )
-)
-
-# Define server logic required to draw a histogram
-server <- function(input, output) {
-    generate_histogram <- function(data, var, title) {
-      ggplot(data) +
-        geom_histogram(aes_string(x = var), bins = 40, fill = "gray") +
-        labs(title = title, x = var, y = "Frequency", subtitle = 'Frequency per cause for all countries')
-    }
-    # Render the side-by-side histograms
-    output$histogram <- renderPlot({
-      generate_histogram(df, input$x, colnames(input$var))
-    })
-}
-
-# Run the application 
-shinyApp(ui = ui, server = server)
-```
-
 
 First check the data range by histogram. Variables that are linked to environment such as outdoor and household air quality tend to cause more deaths. This may prove that the long-term influence of poor air quality, which often sustains through a longer period, can kill many people living in that area/region.
 
@@ -154,38 +116,6 @@ In contrast, causes such as *iron deficiency* and *vitamin A deficiency* lead to
 Across all variables, a fact is that high value of mortality does not appear often as most values seem to stay close to the lower boundary. Note a spike near zero for all example figures.
 
 ### Boxplot single
-```{r boxsingle, include=FALSE}
-# Define UI for application that draws a plot
-ui <- fluidPage(
-
-    # Application title
-    # titlePanel("Boxplot for single death cause per country"),
-
-    # Sidebar with a slider input for number of bins 
-    sidebarLayout(
-        sidebarPanel(
-          selectInput(inputId = "con", label = "Choose country", choices = unique(df$Entity)),
-          selectInput(inputId = "var", label = "Choose death cause", choices = names(df[, -c(1:3)])),
-        ),
-        # Show a plot of the generated distribution
-        mainPanel(
-           plotOutput("boxplot")
-        )
-    )
-)
-
-# Define server logic required to draw a histogram
-server <- function(input, output) {
-  # Render the side-by-side histograms
-  output$boxplot <- renderPlot({
-    data <- df[df['Entity']==input$con,] #df[df['Entity']=='China',]
-    boxplot(data[input$var], xlab=input$var, ylab = 'Count')
-  })
-}
-
-# Run the application 
-shinyApp(ui = ui, server = server)
-```
 
 After comparing different countries with boxplot, it is noticeable that developed countries usually have less mortalities than developing countries in causes related to poor hygiene (e.g. water quality, unsafe sanitation and no access to hand washing facility). 
 
@@ -197,99 +127,7 @@ After comparing different countries with boxplot, it is noticeable that develope
 
 Two pairs of countries are selected here as examples between the *Uk* and *Tanzania*, as well as the *Netherlands* and *Cambodia*. The reason why they are compared to each other is because counties in each pair shares similar population according to [Worldometers](https://www.worldometers.info/world-population/population-by-country/).
 
-```{r boxcompare, include=FALSE}
-# Define UI for application that draws a histogram
-ui <- fluidPage(
-
-    # Application title
-    titlePanel("UK vs Tanzania | Netherlands vs Cambodia"),
-
-    # Sidebar with a slider input for number of bins 
-    sidebarLayout(
-        sidebarPanel(
-          selectInput(inputId = "var", label = "Choose death cause", choices = c('Unsafe.water.source', 'Unsafe.sanitation', 'No.access.to.handwashing.facility')),
-        ),
-        # Show a plot of the generated distribution
-        mainPanel(
-           plotOutput("boxplot")
-        )
-    )
-)
-
-# Define server logic required to draw a histogram
-server <- function(input, output) {
-  # Render the side-by-side histograms
-  output$boxplot <- renderPlot({
-    sel_var <- input$var
-    
-    p1 <- ggplot(dataUK) + geom_boxplot(aes_string(y=sel_var)) +
-      labs(x = input$var, y= 'Count', title = 'UK')
-    
-    p2 <- ggplot(dataTAN) + geom_boxplot(aes_string(y=sel_var)) +
-      labs(x = input$var, y= 'Count', title = 'Tanzania')
-    
-    p3 <- ggplot(dataNLD) + geom_boxplot(aes_string(y=sel_var)) +
-      labs(x = input$var, y= 'Count', title = 'Netherlands')
-    
-    p4 <- ggplot(dataCAM) + geom_boxplot(aes_string(y=sel_var)) +
-      labs(x = input$var, y= 'Count', title = 'Cambodia')
-    
-    grid.arrange(p1, p2, p3, p4, nrow=2)
-  })
-}
-
-# Run the application 
-shinyApp(ui = ui, server = server)
-```
-
 ### Trend comparison
-```{r linesingle, include=FALSE}
-# Define UI for application that draws a histogram
-ui <- fluidPage(
-
-    # Application title
-    # titlePanel("Trend for single death cause per country"),
-    sidebarLayout(
-        sidebarPanel(
-          selectInput(inputId = "var", label = "Choose death cause", choices = names(df[, -c(1:3)])),
-        ),
-        # Show a plot of the generated distribution
-        mainPanel(
-           plotOutput("trendline")
-        )
-    )
-)
-
-# Define server logic required to draw a plot
-server <- function(input, output) {
-  # Render the side-by-side histograms
-  output$trendline <- renderPlot({
-    sel_var <- input$var
-   
-    p1 <- ggplot(dataUK, aes_string(x ='Year', y=sel_var)) + 
-      geom_line(color='gray', size=2) + 
-      labs(title = 'UK')
-    
-    p2 <- ggplot(dataTAN, aes_string(x ='Year', y=sel_var)) + 
-      geom_line(color='gray', size=2) + 
-      labs(title = 'Tanzania')
-    
-    p3 <- ggplot(dataNLD, aes_string(x ='Year', y=sel_var)) + 
-      geom_line(color='gray', size=2) + 
-      labs(title = 'Netherlands')
-    
-    p4 <- ggplot(dataCAM, aes_string(x ='Year', y=sel_var)) + 
-      geom_line(color='gray', size=2) + 
-      labs(title = 'Cambodia')
-    
-    grid.arrange(p1, p2, p3, p4, nrow=2)
-    # ggplot(data, aes_string(x ='Year', y=sel_var)) + geom_line(color='gray', size=2)
-  })
-}
-
-# Run the application 
-shinyApp(ui = ui, server = server)
-```
 
 Line graph shows the trend of certain causes from 1990 to 2019. Comparison between countries shows interesting facts.  Alcohol use seems to be more detrimental to people's health in recent years in both developed and developing countries selected in previous section. 
 
@@ -316,51 +154,6 @@ When comparing multiple variables, it is clear that diet related death causes ar
 Smooth curve and jittering points shows drug use and unsafe sex clustering when sex fatality value is low.  Once the value grows further they seemed less correlated.
 
 ![](./images/smooth_sexdrug_lim.JPG)
-
-```{r histdouble, include=FALSE}
-ui <- fluidPage(
-
-    # Application title
-    titlePanel("Histogram within a country"),
-
-    # Sidebar with a slider input for number of bins 
-    sidebarLayout(
-        sidebarPanel(
-          selectInput(inputId = "con", label = "Choose country", choices = unique(df$Entity)),
-          selectInput(inputId = "var1", label = "Choose death cause1", choices = names(df[, -c(1:3)])),
-          selectInput(inputId = "var2", label = "Choose death cause2", choices = names(df[, -c(1:3)]))
-        ),
-        # Show a plot of the generated distribution
-        mainPanel(
-           plotOutput("histogram")
-        )
-    )
-)
-
-# Define server logic required to draw a histogram
-server <- function(input, output) {
-    generate_histogram <- function(data, con, x_var1, x_var2, title) {
-      data <- data[data$Entity == con,]
-      
-      p1 <- ggplot(data, aes_string(x = x_var1)) +
-        geom_histogram(bins = 20, fill = "gray") +
-        labs(title = title, x = x_var1, y = "Frequency", subtitle = 'Frequency per cause per country')
-      
-      p2 <- ggplot(data, aes_string(x = x_var2)) +
-        geom_histogram(bins = 20, fill = "gray") +
-        labs(title = title, x = x_var2, y = "Frequency", subtitle = 'Frequency per cause per country')
-      
-      grid.arrange(p1, p2, nrow = 1)
-    }
-    # Render the side-by-side histograms
-    output$histogram <- renderPlot({
-      generate_histogram(df, input$con, input$var1, input$var2, colnames(input$var))
-    })
-}
-
-# Run the application 
-shinyApp(ui = ui, server = server)
-```
 
 ### Missing values and anomolies
 
@@ -475,7 +268,7 @@ print(dim(dTest))
 
 ```
 
-The next step is to iterate through the generated True/False diet related variables and see which one has the best prediction chance. Anything that is selected should help predict the result better than a null model. Therefore LogNull, the log likelihood of null model, is used as a selection criteria. Only variables that can create better deviance reduction than the null model are printed in the result. The same threshold holds for both numerical and categorical variables.
+The next step is to iterate through the generated True/False diet related variables and see which one has the best prediction chance. Here the null model is saying the prediction will be the overall proportion of True values, regardless what input it receives. Therefore, anything that is selected should help predict the result better than this null model. 
 
 ```{r single_var_compare, echo=TRUE, warning=FALSE}
 mkPredC <- function(outCol, varCol, appCol) {
@@ -513,7 +306,7 @@ cat("The log likelihood of the Null model is:", logNull)
 
 # selCatVars is a vector that keeps the names of the top performing categorical variables.
 selCatVars <- c()
-minDrop <- logNull  # may need to adjust this number
+minDrop <- 0.5  
 
 for (v in catVars) {
   pi <- paste('pred.', v, sep='')
@@ -597,3 +390,4 @@ In the result, all diet related variables perform poorly as they only have 50% c
 - pred.**Unsafe.sanitation**.rate: trainAUC: 0.551; calibrationAUC: 0.530
 - pred.**Diet.low.in.nuts.and.seeds**.rate: trainAUC: 0.515; calibrationAUC: 0.549
 - pred.**Non.exclusive.breastfeeding**.rate: trainAUC: 0.506; calibrationAUC: 0.514
+
