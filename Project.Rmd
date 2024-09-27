@@ -18,39 +18,44 @@ library(knitr)
 library(dplyr)
 
 # load dataset
-df <- read.csv("./Countries and death causes.csv",header = T, sep=",")
+df_original <- read.csv("./Countries and death causes.csv",header = T, sep=",")
 
-numericVars <- sort(names(df[, -c(1:3)]))
-df_num <- df[numericVars]
+df <- df_original
 
 dietFeatureVars <- c('Diet.low.in.whole.grains', 'Diet.low.in.fruits', 'Diet.low.in.Vegetables', 'Diet.low.in.nuts.and.seeds')
 dietTargetVar <- c('Diet.high.in.sodium')
+
+count_nas <- function(data){
+  count_missing <- function(data){
+    sapply(data, FUN=function(col) sum(is.na(col)))
+  }
+  nacounts <- count_missing(data)
+  hasNA = which(nacounts > 0)
+  nacounts[hasNA]
+}
+
+count_null <- function(data){
+  count_missing <- function(data){
+    sapply(data, FUN=function(col) sum(col == ''))
+  }
+  nullcounts <- count_missing(data)
+  hasNull = which(nullcounts > 0)
+  nullcounts[hasNull]
+}
+
+count_negative <- function(data){
+  count_missing <- function(data){
+    sapply(data, FUN=function(col) sum(col < 0))
+  }
+  negcounts <- count_missing(data)
+  hasNegative = which(negcounts > 0)
+  negcounts[hasNegative]
+}
 
 dataUK <- df[df['Entity']=='United Kingdom',] #df[df['Entity']=='China',]
 dataTAN <- df[df['Entity']=='Tanzania',]
 dataNLD <- df[df['Entity']=='Netherlands',]
 dataCAM <- df[df['Entity']=='Cambodia',]
-
-# count_strange() <- function(data, strange){
-#   if(strange == 'na'){
-#     sapply(data, FUN=function(col) sum(is.na(col)))
-#   }
-#   else if (strange == 'null'){
-#     sapply(data, FUN=function(col) sum(is.null(col)))
-#   }
-#   else if (strange == 'zero'){
-#     sapply(data, FUN=function(col) sum(col == 0))
-#   }
-#   else if (strange == 'negative'){
-#     sapply(data, FUN=function(col) sum(col < 0))
-#   }
-# }
-# 
-# strange_cols <- function(data, strange){
-#   counts <- count_strange(data, strange)
-#   hasStrange = which(counts > 0)
-#   counts[hasStrange]
-# }
 
 ```
 
@@ -360,7 +365,8 @@ These values are checked in all numerical variables: *NA, null, zeros* and *nega
 
 ```{r nas, echo=TRUE} 
 
-df_num <- df[, -c(1:3)] # get only numerical variables
+numericVars <- names(df[, -c(1:3)]) # ignore Entity, Code and Year columns
+df_num <- df[numericVars]
 
 print(sum(is.na(df_num)))
 
@@ -371,30 +377,60 @@ print(sum(df_num < 0))
 print(sum(df_num == 0))
 ```
 
-Currently there is no NA's in the dataset, neither are there any negative values. Zero may indicate that either no one died of that specific cause in a country in a specific year, or they were missing values. Although it is possible to treat zero's as missing values and replace them with e.g. median or mean, doing this will overwrite all the zero's which are truly reflecting zero mortality.  Therefore, in this exploration attempt we will keep zero's as-is.
+Currently there is no NA's in the dataset, neither are there any negative values. There are zero values, which may indicate that either no one died of that specific cause in a country in a specific year, or they were missing values. Although it is possible to treat zero's as missing values and replace them with e.g. median or mean, doing this will overwrite all the zero's which are truly reflecting zero mortality.  Therefore, in this exploration attempt we will keep zero's as-is.
 
+When checking the first three columns it shows that *Code* are empty in 690 rows. These appear to be specific to aggregated regions e.g. OECD Countries, or regions within a country without a valid country code e.g. Scotland.
 
-### Classficatioin 
+```{r rm_code, echo=TRUE}
+
+count_empty <- function(data){
+  count_missing <- function(data){
+    sapply(data, FUN=function(col) sum(col == ''))
+  }
+  nullcounts <- count_missing(data)
+  hasNull = which(nullcounts > 0)
+  nullcounts[hasNull]
+}
+
+print(count_empty(df))
+empty_rows <- df[df$Code == '', ]
+print(empty_rows[sample(nrow(empty_rows), size = 6, replace = F), c(1:6)])
+```
+
+Since the Entity variable has no missing value and shows clear label of the region/country, we decide to drop the *Code* column for a cleaner dataset.
+
+```{r}
+df_v2 <- df
+df_v2$Code <- NULL
+```
+
+### Classfication 
 
 In the pairwise scatterplot it was clear that several diet related causes has linear relation, although the correction is strong for some regions than others. Therefore we would like to explore here from classification perspective which variable is the best to predict *Diet.high.in.sodium* which will be our target variable. 
 
 The feature variables are *Diet.low.in.fruit* and *Diet.low.in.vegetables*. We will create a rate where it counts the percentage of death from that specific cause, with respect to the total death count from all causes in that row. The goal is to see when both feature variables are over their median rate, whether the target variable will also be over its own median.
 
-```{r addCat, echo=TRUE}
-df_v2 <- df_num
-df_v2$total.mortality <- rowSums(df_v2)
+## TODO
+- Take categorical variables (year, countries?)
+- Make categorical vars from diet related vars (T/F, over media)
+- Make death contribution rates and reserve them as numeric variables for Naive Bayers and Decision Tree modelling
+- Compare the different prediction methods and scoring (AUC)
 
-df_v2 <- df_v2 |>
-  mutate(
-    # fruit.rate = (Diet.low.in.fruits/total.mortality),
-    # vege.rate = (Diet.low.in.Vegetables/total.mortality),
-    sodium.rate = (Diet.high.in.sodium/total.mortality)
-    ) |>
-  mutate(
-    # fruit.over.median = (fruit.rate > median(fruit.rate)), # indicate if death count of low fruit consumption is over its median
-    # vege.over.median = (vege.rate > median(vege.rate)), # indicate if death count of low vegetable consumption is over its median
-    sodium.over.median = (sodium.rate > median(sodium.rate)) # flag if death count of high sodium consumption is over its median
-  )
+```{r addCat, echo=TRUE}
+# df_v2 <- df_v2[numericVars]
+#df_v2$total.mortality <- rowSums(df_v2)
+
+# df_v2 <- df_v2 |>
+#   mutate(
+#     # fruit.rate = (Diet.low.in.fruits/total.mortality),
+#     # vege.rate = (Diet.low.in.Vegetables/total.mortality),
+#     sodium.rate = (Diet.high.in.sodium/total.mortality)
+#     ) |>
+#   mutate(
+#     # fruit.over.median = (fruit.rate > median(fruit.rate)), # indicate if death count of low fruit consumption is over its median
+#     # vege.over.median = (vege.rate > median(vege.rate)), # indicate if death count of low vegetable consumption is over its median
+#     sodium.over.median = (sodium.rate > median(sodium.rate)) # flag if death count of high sodium consumption is over its median
+#   )
 ```
 
 Now it is time to separate the data into training (81%), calibration(9%) and test (10%) data.
@@ -450,16 +486,6 @@ mkPredN <- function(outCol, varCol, appCol) {
   mkPredC(outCol, varC, appC)
 }
 
-# now go through all the diet related numerical variables in the `numericVars` vector
-# and perform the predictions. Again, the outputs are stored back into
-# the data frame.
-for (v in dietFeatureVars) {
-  pi <- paste('pred', v, sep='')
-  dTrain[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
-  dTest[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTest[,v])
-  dCal[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dCal[,v])
-}
-
 calcAUC <- function(ypred, ytrue) {
     perf <- performance(prediction(ypred, ytrue), 'auc')
     as.numeric(perf@y.values)
@@ -477,6 +503,16 @@ logNull <- logLikelihood(sum(dCal[,outcome]==pos)/nrow(dCal), dCal[,outcome]==po
 cat("The log likelihood of the Null model is:", logNull)
 
 ## The log likelihood of the Null model is: -1178.017
+
+# now go through all the diet related numerical variables in the `numericVars` vector
+# and perform the predictions. Again, the outputs are stored back into
+# the data frame.
+for (v in dietFeatureVars) {
+  pi <- paste('pred', v, sep='')
+  dTrain[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
+  dTest[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTest[,v])
+  dCal[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dCal[,v])
+}
 
 # selNumVars is a vector that keeps the names of the top performing numerical variables.
 selNumVars <- c()
