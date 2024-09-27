@@ -14,11 +14,8 @@ df <- df_original[, -c(2)]
 df$Entity <- as.factor(df$Entity)
 df$Year <- as.factor(df$Year)
 
-#df_num <- df[numericVars]
-
 dietFeatureVars <- c('Diet.low.in.whole.grains', 'Diet.low.in.fruits',
                      'Diet.low.in.Vegetables', 'Diet.low.in.nuts.and.seeds')
-dietTargetVar <- c('Diet.high.in.sodium')
 
 countries <- unique(df$Entity)
 years <- 1990:2019
@@ -164,6 +161,3 @@ for (v in selVars) {
   cat(sprintf("Variable %6s: AUC = %g\n", orig_v, calcAUC(dTest[,v], dTest[,outcome]==pos)))
 }
 
-############# Try decision tree modelling
-#dt <- rpart(formula = )
-summary(iris)

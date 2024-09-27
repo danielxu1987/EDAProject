@@ -406,9 +406,9 @@ df_v2$Code <- NULL
 
 ### Classfication 
 
-In the pairwise scatterplot it was clear that several diet related causes has linear relation, although the correction is strong for some regions than others. Therefore we would like to explore here from classification perspective which variable is the best to predict *Diet.high.in.sodium* which will be our target variable. 
+We would like to predict *Diet.high.in.sodium*. In the pairwise scatterplot from previous section it was clear that several diet related causes have a stronger linear correlation. Therefore we would like to pick these feature variables: *'Diet.low.in.whole.grains', 'Diet.low.in.fruits', 'Diet.low.in.Vegetables',* and *'Diet.low.in.nuts.and.seeds'*. 
 
-The feature variables are *Diet.low.in.fruit* and *Diet.low.in.vegetables*. We will create a rate where it counts the percentage of death from that specific cause, with respect to the total death count from all causes in that row. The goal is to see when both feature variables are over their median rate, whether the target variable will also be over its own median.
+In the preprocessing stage, We will create a rate where it counts the percentage or weight of each specific variable, with respect to the total death count from all causes in that row. Then generate an outcome column *sodium.over.median* which indicates if sodium contributes to the mortality weight more than its median. This variable holds the ground truth to check against the prediction later. Do the same for selected feature variables which generate new columns indicating if these dietary causes contribute more over their median weight or not.
 
 ## TODO
 - Take categorical variables (year, countries?)
@@ -417,35 +417,50 @@ The feature variables are *Diet.low.in.fruit* and *Diet.low.in.vegetables*. We w
 - Compare the different prediction methods and scoring (AUC)
 
 ```{r addCat, echo=TRUE}
-# df_v2 <- df_v2[numericVars]
-#df_v2$total.mortality <- rowSums(df_v2)
+df$Entity <- as.factor(df$Entity)
+df$Year <- as.factor(df$Year)
 
-# df_v2 <- df_v2 |>
-#   mutate(
-#     # fruit.rate = (Diet.low.in.fruits/total.mortality),
-#     # vege.rate = (Diet.low.in.Vegetables/total.mortality),
-#     sodium.rate = (Diet.high.in.sodium/total.mortality)
-#     ) |>
-#   mutate(
-#     # fruit.over.median = (fruit.rate > median(fruit.rate)), # indicate if death count of low fruit consumption is over its median
-#     # vege.over.median = (vege.rate > median(vege.rate)), # indicate if death count of low vegetable consumption is over its median
-#     sodium.over.median = (sodium.rate > median(sodium.rate)) # flag if death count of high sodium consumption is over its median
-#   )
+dietFeatureVars <- c('Diet.low.in.whole.grains', 'Diet.low.in.fruits',
+                     'Diet.low.in.Vegetables', 'Diet.low.in.nuts.and.seeds')
+
+#df_v2 <- df_num
+df$total.mortality <- rowSums(df[numericVars])
+
+df <- df |>
+  mutate(
+    fruit.rate = (Diet.low.in.fruits/total.mortality),
+    vege.rate = (Diet.low.in.Vegetables/total.mortality),
+    grain.rate = (Diet.low.in.whole.grains/total.mortality),
+    nutseed.rate = (Diet.low.in.nuts.and.seeds/total.mortality),
+    sodium.rate = (Diet.high.in.sodium/total.mortality)
+  ) |>
+  mutate(
+    fruit.over.median = (fruit.rate > median(fruit.rate)), # indicate if death count of low fruit consumption is over its median
+    vege.over.median = (vege.rate > median(vege.rate)), # indicate if death count of low vegetable consumption is over its median
+    grain.over.median = (grain.rate > median(grain.rate)),
+    nutseed.over.median = (nutseed.rate > median(nutseed.rate)),
+    sodium.over.median = (sodium.rate > median(sodium.rate)) # flag if death count of high sodium consumption is over its median
+  )
 ```
 
 Now it is time to separate the data into training (81%), calibration(9%) and test (10%) data.
 
 ```{r get_train_cal_test, echo=TRUE}
+outcome <- c('sodium.over.median')
 pos <- TRUE # positive value indicator
-d <- df_v2
+
+d <- df
+
 set.seed(729375)
 d$rgroup <- runif(dim(d)[1])
 dTrainAll <- subset(d, rgroup<=0.9)
 dTest <- subset(d, rgroup>0.9)
-outcome <- c('sodium.over.median')
+
 # names of columns that are categorical type and numerical type
 vars <- setdiff(colnames(dTrainAll), c(outcome, 'rgroup'))
-catVars <- vars[sapply(dTrainAll[, vars], class) %in% c('factor', 'character')]
+catVars <- vars[sapply(df[,vars], class) %in% c('character', 'logical', 'factor')]
+numericVars <- vars[sapply(df[,vars], class) %in% c('numeric','integer')]
+
 
 # split dTrainAll into a training set and a validation (or calibration) set
 useForCal <- rbinom(n=dim(dTrainAll)[1], size=1, prob=0.1)>0
@@ -460,10 +475,9 @@ print(dim(dTest))
 
 ```
 
-The next step is to process the numerical variables. Iterate through them all and see which variable has the best prediction chance.
+The next step is to interate through the True/False dietary causes and see which variable has the best prediction chance.
 
-```{r single_var_compare, echo=TRUE}
-# perform single variable prediction for a given categorical column
+```{r single_var_compare, echo=TRUE, warning=FALSE}
 mkPredC <- function(outCol, varCol, appCol) {
   pPos <- sum(outCol==pos)/length(outCol)
   naTab <- table(as.factor(outCol[is.na(varCol)]))
@@ -476,19 +490,19 @@ mkPredC <- function(outCol, varCol, appCol) {
   pred
 }
 
-# for numerical variables, we convert them into categorical one and
-# call the `mkPredC` function above.
-mkPredN <- function(outCol, varCol, appCol) {
-  cuts <- unique(as.numeric(
-    quantile(varCol, probs=seq(0, 1, 0.1), na.rm=T)))
-  varC <- cut(varCol, cuts)
-  appC <- cut(appCol, cuts)
-  mkPredC(outCol, varC, appC)
+# now go through all the categorical variables in the `catVars` vector
+# and perform the predictions. The outputs are stored back into the
+# data frame.
+for (v in catVars) {
+  pi <- paste('pred.', v, sep='')
+  dTrain[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dTrain[,v])
+  dCal[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dCal[,v])
+  dTest[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dTest[,v])
 }
 
 calcAUC <- function(ypred, ytrue) {
-    perf <- performance(prediction(ypred, ytrue), 'auc')
-    as.numeric(perf@y.values)
+  perf <- performance(prediction(ypred, ytrue), 'auc')
+  as.numeric(perf@y.values)
 }
 
 # Define a function to compute log likelihood so that we can reuse it.
@@ -497,34 +511,27 @@ logLikelihood <- function(ypred, ytrue) {
 }
 
 # Compute the likelihood of the Null model on the calibration
-# set (for the KDD dataset from previous lecture)
 logNull <- logLikelihood(sum(dCal[,outcome]==pos)/nrow(dCal), dCal[,outcome]==pos)
-
 cat("The log likelihood of the Null model is:", logNull)
 
-## The log likelihood of the Null model is: -1178.017
+## The log likelihood of the Null model is -424.2028
 
-# now go through all the diet related numerical variables in the `numericVars` vector
-# and perform the predictions. Again, the outputs are stored back into
-# the data frame.
-for (v in dietFeatureVars) {
-  pi <- paste('pred', v, sep='')
-  dTrain[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
-  dTest[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTest[,v])
-  dCal[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dCal[,v])
-}
 
-# selNumVars is a vector that keeps the names of the top performing numerical variables.
-selNumVars <- c()
-minDrop <- 10  # may need to adjust this number
-for (v in dietFeatureVars) {
-  pi <- paste('pred', v, sep='')
+# selCatVars is a vector that keeps the names of the top performing categorical variables.
+selCatVars <- c()
+minDrop <- 0.5  # may need to adjust this number
+
+
+for (v in catVars) {
+  pi <- paste('pred.', v, sep='')
   devDrop <- 2*(logLikelihood(dCal[,pi], dCal[,outcome]==pos) - logNull)
   if (devDrop >= minDrop) {
     cat(sprintf("%6s, deviance reduction: %g\n", v, devDrop))
-    selNumVars <- c(selNumVars, pi)
+    selCatVars <- c(selCatVars, pi)
   }
 }
+
+cat('Selected variables are ', catVars, sep = ', ')
 
 ```
 
