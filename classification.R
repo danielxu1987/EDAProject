@@ -3,6 +3,7 @@
 library(knitr)
 library(dplyr)
 library(rpart)
+library(ROCR)
 
 # load dataset
 df_original <- read.csv("./Countries and death causes.csv",header = T, sep=",")
@@ -23,20 +24,17 @@ years <- 1990:2019
 #df_v2 <- df_num
 df$total.mortality <- rowSums(df[numericVars])
 
+for (col in numericVars) {
+  df[paste0(col, ".rate")] <- df[col] / df['total.mortality']
+}
+
 df <- df |>
   mutate(
-    fruit.rate = (Diet.low.in.fruits/total.mortality),
-    vege.rate = (Diet.low.in.Vegetables/total.mortality),
-    grain.rate = (Diet.low.in.whole.grains/total.mortality),
-    nutseed.rate = (Diet.low.in.nuts.and.seeds/total.mortality),
-    sodium.rate = (Diet.high.in.sodium/total.mortality)
-  ) |>
-  mutate(
-    fruit.over.median = (fruit.rate > median(fruit.rate)), # indicate if death count of low fruit consumption is over its median
-    vege.over.median = (vege.rate > median(vege.rate)), # indicate if death count of low vegetable consumption is over its median
-    grain.over.median = (grain.rate > median(grain.rate)),
-    nutseed.over.median = (nutseed.rate > median(nutseed.rate)),
-    sodium.over.median = (sodium.rate > median(sodium.rate)) # flag if death count of high sodium consumption is over its median
+    fruit.over.median = (Diet.low.in.fruits.rate > median(Diet.low.in.fruits.rate)), # indicate if death count of low fruit consumption is over its median
+    vege.over.median = (Diet.low.in.Vegetables.rate > median(Diet.low.in.Vegetables.rate)), # indicate if death count of low vegetable consumption is over its median
+    grain.over.median = (Diet.low.in.whole.grains.rate > median(Diet.low.in.whole.grains.rate)),
+    nutseed.over.median = (Diet.low.in.nuts.and.seeds.rate > median(Diet.low.in.nuts.and.seeds.rate)),
+    sodium.over.median = (Diet.high.in.sodium.rate > median(Diet.high.in.sodium.rate)) # flag if death count of high sodium consumption is over its median
   )
 
 outcome <- c('sodium.over.median')
@@ -126,10 +124,13 @@ mkPredN <- function(outCol, varCol, appCol) {
   mkPredC(outCol, varC, appC)
 }
 
+# get all percentage / rate variables 
+rateVars <- grep("\\.rate$", numericVars, value = TRUE)
+
 # now go through all the diet related numerical variables in the `numericVars` vector
 # and perform the predictions. Again, the outputs are stored back into
 # the data frame.
-for (v in numericVars) {
+for (v in rateVars) {
   pi <- paste('pred.', v, sep='')
   dTrain[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
   dTest[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTest[,v])
@@ -142,7 +143,7 @@ for (v in numericVars) {
 # selNumVars is a vector that keeps the names of the top performing numerical variables.
 selNumVars <- c()
 minDrop <- 0  # may need to adjust this number
-for (v in numericVars) {
+for (v in rateVars) {
   pi <- paste('pred.', v, sep='')
   devDrop <- 2*(logLikelihood(dCal[,pi], dCal[,outcome]==pos) - logNull)
   if (devDrop >= minDrop) {

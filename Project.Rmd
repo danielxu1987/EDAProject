@@ -16,14 +16,17 @@ library(ggplot2)
 library(gridExtra)
 library(knitr)
 library(dplyr)
+library(ROCR)
 
 # load dataset
 df_original <- read.csv("./Countries and death causes.csv",header = T, sep=",")
 
 df <- df_original
 
-dietFeatureVars <- c('Diet.low.in.whole.grains', 'Diet.low.in.fruits', 'Diet.low.in.Vegetables', 'Diet.low.in.nuts.and.seeds')
+dietVars <- c('Diet.low.in.whole.grains', 'Diet.low.in.fruits', 'Diet.low.in.Vegetables', 'Diet.low.in.nuts.and.seeds', 'Diet.high.in.sodium')
+
 dietTargetVar <- c('Diet.high.in.sodium')
+dietFeatureVars <- dietVars[dietVars != dietTargetVar]
 
 count_nas <- function(data){
   count_missing <- function(data){
@@ -399,16 +402,21 @@ print(empty_rows[sample(nrow(empty_rows), size = 6, replace = F), c(1:6)])
 
 Since the Entity variable has no missing value and shows clear label of the region/country, we decide to drop the *Code* column for a cleaner dataset.
 
-```{r}
-df_v2 <- df
-df_v2$Code <- NULL
+```{r rmcode}
+df$Code <- NULL
+```
+
+```{r global, include=FALSE}
+outcome <- c('sodium.over.median')
+# sodium.over.median
+pos <- TRUE # positive value indicator
 ```
 
 ### Classfication 
 
-We would like to predict *Diet.high.in.sodium*. In the pairwise scatterplot from previous section it was clear that several diet related causes have a stronger linear correlation. Therefore we would like to pick these feature variables: *'Diet.low.in.whole.grains', 'Diet.low.in.fruits', 'Diet.low.in.Vegetables',* and *'Diet.low.in.nuts.and.seeds'*. 
+We would like to predict **`r outcome`**. In the pairwise scatterplot from previous section it was clear that several diet related causes have a stronger linear correlation. Therefore we would like to pick these variables in dietFeatureVars `r dietFeatureVars`
 
-In the preprocessing stage, We will create a rate where it counts the percentage or weight of each specific variable, with respect to the total death count from all causes in that row. Then generate an outcome column *sodium.over.median* which indicates if sodium contributes to the mortality weight more than its median. This variable holds the ground truth to check against the prediction later. Do the same for selected feature variables which generate new columns indicating if these dietary causes contribute more over their median weight or not.
+In the pre-processing stage, We will create a rate where it counts the percentage or weight of each specific variable, with respect to the total death count from all causes in that row. Then generate an outcome column *`r outcome``* which indicates if it contributes to the mortality weight more than its median. This variable holds the ground truth to check against the prediction later. Do the same for selected variables which generate new columns, indicating if these causes contribute more over their median weight or not. These will be the categorical variables to evaluate in the single variable selection process.
 
 ## TODO
 - Take categorical variables (year, countries?)
@@ -420,34 +428,26 @@ In the preprocessing stage, We will create a rate where it counts the percentage
 df$Entity <- as.factor(df$Entity)
 df$Year <- as.factor(df$Year)
 
-dietFeatureVars <- c('Diet.low.in.whole.grains', 'Diet.low.in.fruits',
-                     'Diet.low.in.Vegetables', 'Diet.low.in.nuts.and.seeds')
-
 #df_v2 <- df_num
 df$total.mortality <- rowSums(df[numericVars])
 
+for (col in numericVars) {
+    df[paste0(col, ".rate")] <- df[col] / df['total.mortality']
+}
+
 df <- df |>
   mutate(
-    fruit.rate = (Diet.low.in.fruits/total.mortality),
-    vege.rate = (Diet.low.in.Vegetables/total.mortality),
-    grain.rate = (Diet.low.in.whole.grains/total.mortality),
-    nutseed.rate = (Diet.low.in.nuts.and.seeds/total.mortality),
-    sodium.rate = (Diet.high.in.sodium/total.mortality)
-  ) |>
-  mutate(
-    fruit.over.median = (fruit.rate > median(fruit.rate)), # indicate if death count of low fruit consumption is over its median
-    vege.over.median = (vege.rate > median(vege.rate)), # indicate if death count of low vegetable consumption is over its median
-    grain.over.median = (grain.rate > median(grain.rate)),
-    nutseed.over.median = (nutseed.rate > median(nutseed.rate)),
-    sodium.over.median = (sodium.rate > median(sodium.rate)) # flag if death count of high sodium consumption is over its median
+    fruit.over.median = (Diet.low.in.fruits.rate > median(Diet.low.in.fruits.rate)), # indicate if death count of low fruit consumption is over its median
+    vege.over.median = (Diet.low.in.Vegetables.rate > median(Diet.low.in.Vegetables.rate)), # indicate if death count of low vegetable consumption is over its median
+    grain.over.median = (Diet.low.in.whole.grains.rate > median(Diet.low.in.whole.grains.rate)),
+    nutseed.over.median = (Diet.low.in.nuts.and.seeds.rate > median(Diet.low.in.nuts.and.seeds.rate)),
+    sodium.over.median = (Diet.high.in.sodium.rate > median(Diet.high.in.sodium.rate)) # flag if death count of high sodium consumption is over its median
   )
 ```
 
 Now it is time to separate the data into training (81%), calibration(9%) and test (10%) data.
 
 ```{r get_train_cal_test, echo=TRUE}
-outcome <- c('sodium.over.median')
-pos <- TRUE # positive value indicator
 
 d <- df
 
@@ -475,7 +475,7 @@ print(dim(dTest))
 
 ```
 
-The next step is to interate through the True/False dietary causes and see which variable has the best prediction chance.
+The next step is to iterate through the generated True/False diet related variables and see which one has the best prediction chance.
 
 ```{r single_var_compare, echo=TRUE, warning=FALSE}
 mkPredC <- function(outCol, varCol, appCol) {
@@ -500,11 +500,6 @@ for (v in catVars) {
   dTest[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dTest[,v])
 }
 
-calcAUC <- function(ypred, ytrue) {
-  perf <- performance(prediction(ypred, ytrue), 'auc')
-  as.numeric(perf@y.values)
-}
-
 # Define a function to compute log likelihood so that we can reuse it.
 logLikelihood <- function(ypred, ytrue) {
   sum(ifelse(ytrue, log(ypred), log(1-ypred)), na.rm=T)
@@ -518,8 +513,7 @@ cat("The log likelihood of the Null model is:", logNull)
 
 # selCatVars is a vector that keeps the names of the top performing categorical variables.
 selCatVars <- c()
-minDrop <- 0.5  # may need to adjust this number
-
+minDrop <- logNull  # may need to adjust this number
 
 for (v in catVars) {
   pi <- paste('pred.', v, sep='')
@@ -529,11 +523,71 @@ for (v in catVars) {
     selCatVars <- c(selCatVars, pi)
   }
 }
-
-cat('Selected variables are ', catVars, sep = ', ')
+# 
+# cat('Selected variables are ', catVars, sep = ', ')
 
 devDrop <- 2*(logLikelihood(dCal[,outcome], dCal[,outcome]==pos) - logNull)
 cat(sprintf("%6s, deviance reduction of ground truth is: %g\n", outcome, devDrop))
+
+```
+Now use all numerical variables for prediction and see which one performs the best to predict contribution of death from `r outcome`.
+
+```{r selnumVar, echo=TRUE, warning=FALSE}
+# get all percentage / rate variables 
+rateVars <- grep("\\.rate$", numericVars, value = TRUE)
+
+# for numerical variables, we convert them into categorical one and
+# call the `mkPredC` function above.
+mkPredN <- function(outCol, varCol, appCol) {
+  cuts <- unique(as.numeric(
+    quantile(varCol, probs=seq(0, 1, 0.1), na.rm=T)))
+  varC <- cut(varCol, cuts)
+  appC <- cut(appCol, cuts)
+  mkPredC(outCol, varC, appC)
+}
+
+# now go through all the diet related numerical variables in the `numericVars` vector
+# and perform the predictions. Again, the outputs are stored back into
+# the data frame.
+for (v in rateVars) {
+  pi <- paste('pred.', v, sep='')
+  dTrain[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
+  dTest[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTest[,v])
+  dCal[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dCal[,v])
+}
+
+
+# fruit.over.median, deviance reduction: 0.501294
+
+# selNumVars is a vector that keeps the names of the top performing numerical variables.
+selNumVars <- c()
+#minDrop <- 0  # may need to adjust this number
+
+for (v in rateVars) {
+  pi <- paste('pred.', v, sep='')
+  devDrop <- 2*(logLikelihood(dCal[,pi], dCal[,outcome]==pos) - logNull)
+  if (devDrop >= minDrop) {
+    cat(sprintf("%6s, deviance reduction: %g\n", v, devDrop))
+    selNumVars <- c(selNumVars, pi)
+  }
+}
+
+calcAUC <- function(ypred, ytrue) {
+  perf <- performance(prediction(ypred, ytrue), 'auc')
+  as.numeric(perf@y.values)
+}
+
+selVars <- c(selCatVars, selNumVars)
+
+## Performance of the top performing single variables on the test set:
+for (v in selVars) {
+  # retrieve the original variable name (character location 5 onward)
+  orig_v <- substring(v, 5)
+  auc <- calcAUC(dTest[,v], dTest[,outcome]==pos)
+  if(auc > 0.5){
+    cat(sprintf("Variable %6s: AUC = %g\n", orig_v, auc))
+  }
+}
 
 ```
 
