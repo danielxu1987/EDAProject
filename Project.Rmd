@@ -200,7 +200,7 @@ df$Code <- NULL
 ```
 
 ```{r global, include=FALSE}
-outcome <- c('smoking.kills.more')
+outcome <- c('Smoking.kills.more')
 # sodium.over.median
 pos <- TRUE # positive value indicator
 ```
@@ -238,7 +238,7 @@ Now it is time to separate the data into training (81%), calibration(9%) and tes
 
 df <- df |>
   mutate(
-    smoking.kills.more = (Smoking.rate > High.body.mass.index.rate)
+    Smoking.kills.more = (Smoking > High.body.mass.index)
 )
 
 d <- df
@@ -267,7 +267,7 @@ The next step is to go through the categorical variables and see which one has t
 
 # names of columns that are categorical type and numerical type
 vars <- setdiff(colnames(dTrainAll), c(outcome, 'rgroup'))
-catVars <- vars[sapply(df[,vars], class) %in% c('character', 'logical', 'factor')]
+catVars <- vars[sapply(df[,vars], class) %in% c('character', 'factor')]
 
 mkPredC <- function(outCol, varCol, appCol) {
   pPos <- sum(outCol==pos)/length(outCol)
@@ -307,7 +307,7 @@ selCatVars <- c()
 for (v in catVars) {
   pi <- paste('pred.', v, sep='')
   logPred <- logLikelihood(dCal[,pi], dCal[,outcome]==pos)
-  cat(sprintf("%6s, log likelihood of: %g\n", v, logPred))
+  cat(sprintf("%6s, log likelihood: %g\n", v, logPred))
   devDrop <- 2*(logPred - logNull)
   
   cat(sprintf("%6s, deviance reduction: %g\n", v, devDrop))
@@ -319,7 +319,24 @@ cat(sprintf("%6s, To compare, deviance reduction of the ground truth is: %g\n", 
 
 ```
 
-Now use all numerical variables for prediction and see which one performs the best to predict contribution of death from `r outcome`.
+The log likelihood and deviance reduction do not look great in both country and year.  From this perspective they do not help much in predicting the result. Let is check how they perform in the ROC curve.
+
+```{r roc_curve, echo=TRUE}
+library(ROCit)
+
+# colour_id 1-7 are: black,red,green,blue,cyan,purple,gold
+plot_roc <- function(predcol, outcol, colour_id=2, overlaid=F) {
+  ROCit_obj <- rocit(score=predcol, class=outcol==pos)
+  par(new=overlaid)
+  plot(ROCit_obj, col = c(colour_id, 1),
+  legend = FALSE, YIndex = FALSE, values = FALSE)
+}
+
+plot_roc(dCal$pred.Year, dCal[,outcome]) #Year is red
+plot_roc(dCal$pred.Entity, dCal[,outcome], colour_id=3, overlaid=T) # Entity is green
+```
+
+Entity seems to help more than Year since it is always higher than the null model. Now we are going to use all numerical variables for prediction and see which one performs the best to predict `r outcome`.
 
 ```{r selnumVar, echo=TRUE, warning=FALSE}
 numericVars <- vars[sapply(df[,vars], class) %in% c('numeric','integer')]
@@ -335,8 +352,8 @@ mkPredN <- function(outCol, varCol, appCol) {
   mkPredC(outCol, varC, appC)
 }
 
-# now go through all the diet related numerical variables in the `numericVars` vector and perform the predictions.
-for (v in rateVars) {
+# now go through all numerical variables in the `numericVars` vector and perform the predictions.
+for (v in numericVars) {
   pi <- paste('pred.', v, sep='')
   dTrain[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
   dTest[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTest[,v])
@@ -345,17 +362,17 @@ for (v in rateVars) {
 
 # selNumVars is a vector that keeps the names of the top performing numerical variables.
 selNumVars <- c()
-minDrop <- 0
+minDrop <- -100
 
-for (v in rateVars) {
+for (v in numericVars) {
   pi <- paste('pred.', v, sep='')
   logPred <- logLikelihood(dCal[,pi], dCal[,outcome]==pos)
   
   devDrop <- 2*(logPred - logNull)
-  #if (devDrop >= minDrop) {
+  if (devDrop >= minDrop) {
     cat(sprintf("%6s, deviance reduction: %g\n", v, devDrop))
     selNumVars <- c(selNumVars, pi)
-  #}
+  }
 }
 
 ```
@@ -369,26 +386,28 @@ calcAUC <- function(ypred, ytrue) {
   as.numeric(perf@y.values)
 }
 
+print(selCatVars)
+print(selNumVars)
+
 selVars <- c(selCatVars, selNumVars)
 
 ## Performance of the top performing single variables on the test set:
 for(v in selVars) {
   pi <- v
   aucTrain <- calcAUC(dTrain[,pi], dTrain[,outcome])
-  if (aucTrain >= 0.51) {
+  if (aucTrain > 0.53) {
+    selVars <- c(selVars, pi)
     aucCal <- calcAUC(dCal[,pi], dCal[,outcome])
     print(sprintf(
       "%s: trainAUC: %4.3f; calibrationAUC: %4.3f",
       pi, aucTrain, aucCal))
-  }
+  } 
 }
 
-pred.Null <- rep(pred.Null, nrow(dCal))
-aucNull <- calcAUC(pred.Null, dCal[,outcome])
-cat(sprintf("AUC of null model in calibration is: %g\n", aucNull))
+print(selVars)
 
 # Run 100-fold cross validation
-vars <- catVars
+vars <- c('Entity', 'Unsafe.water.source', 'Diet.low.in.nuts.and.seeds', 'Household.air.pollution.from.solid.fuels', 'No.access.to.handwashing.facility', 'Child.stunting', 'Iron.deficiency')
 
 for (var in vars) {
   aucs <- rep(0,100)
@@ -402,13 +421,41 @@ for (var in vars) {
   print(sprintf("%s: mean: %4.3f; sd: %4.3f", var, mean(aucs), sd(aucs)))
 }
 
+print(selVars)
+
 ```
 
+AFter inspecting the best performing variables a bit more, *Entity* still seems a good relevant feature variable. *Unsafe.water.source* and *Household.air.pollution.from.solid.fuels* barely predict better than 50% with a high standard deviation that makes its performance low. 
 
+Strange prediction for Entity can be > 1.0??
 
 ```{r double_density_cat, echo=TRUE}
 
-# fig1 <- ggplot(dCal) + geom_density(aes(x=pred.fruit.over.median, color=as.factor(sodium.over.median)))
-# print(fig1)
+# outliers <- dCal[dCal$pred.Entity > 1.0, c('Entity', 'Year', 'pred.Entity', 'Smoking.kills.more', 'Smoking', 'High.body.mass.index', 'Smoking.rate', 'High.body.mass.index.rate')]
+# print(outliers)
+
+fig1 <- ggplot(dCal) + geom_density(aes(x=pred.Entity, color=as.factor(Smoking.kills.more)))
+
+fig2 <- ggplot(dCal) + geom_density(aes(x=pred.Diet.low.in.nuts.and.seeds.rate, color=as.factor(Smoking.kills.more)))
+
+grid.arrange(fig1, fig2, ncol=1)
+
 ```
 
+Check the ROC curve for all 3 variables.
+
+```{r}
+plot_roc(dCal$pred.Unsafe.water.source, dCal[,outcome], colour_id=7) #Water source is gold
+plot_roc(dCal$pred.Entity, dCal[,outcome], colour_id=3, overlaid=T) # Entity is green
+plot_roc(dCal$pred.Household.air.pollution.from.solid.fuels, dCal[,outcome], colour_id=4, overlaid=T) # household air pollution is blue
+```
+*Entity* still appears to be the best performer, with *Unsafe.water.source* being the second best and *Household.air.pollution.from.solid.fuels* being the last which predicts less than the null model around $1-Specificity = 0.8$. This means whether or not smoking kills more people than obesity is a country specific issue. We will take these 3 feature variables into the multiple feature model to see if they all together can do a better job. 
+
+
+## Decision tree model
+
+## Naive Bayers model
+
+## LIME evaluation 
+
+## Clustering
