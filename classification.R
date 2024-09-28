@@ -1,5 +1,13 @@
 # code for classfication only
 
+## TODO
+# - Take categorical variables (year, countries?)
+# - Make categorical vars from diet related vars (T/F, over media)
+# - Make death contribution rates and reserve them as numeric variables for Naive Bayers and Decision Tree modelling
+# - Compare the different prediction methods and scoring (AUC)
+
+
+
 library(knitr)
 library(dplyr)
 library(rpart)

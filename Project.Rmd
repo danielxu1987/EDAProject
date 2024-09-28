@@ -200,7 +200,7 @@ df$Code <- NULL
 ```
 
 ```{r global, include=FALSE}
-outcome <- c('sodium.over.median')
+outcome <- c('smoking.kills.more')
 # sodium.over.median
 pos <- TRUE # positive value indicator
 ```
@@ -209,7 +209,7 @@ pos <- TRUE # positive value indicator
 
 We would like to know more about the death cause that have large impact worldwide. Since the absolute number of mortality can vary largely depending on the population of a country, a better measurement is the percentage of each death cause, with respect to the total casualties in that row. 
 
-We will first create a rate where it counts the percentage or weight of each specific casuality cause
+We will first create a rate to count the percentage of each specific casualty cause. Then visualise the stats with boxplot to see the major players worldwide. Also country (entity) and year will be converted to factor.
 
 ```{r addCat, echo=TRUE}
 df$Entity <- as.factor(df$Entity)
@@ -227,28 +227,19 @@ figRateAll <- ggplot(stack(df[rateVars])) + geom_boxplot(mapping = aes(x = ind, 
 
 print(figRateAll)
 
-df <- df |>
-  mutate(
-    fruit.over.median = (Diet.low.in.fruits.rate > median(Diet.low.in.fruits.rate)), # indicate if death count of low fruit consumption is over its median
-    vege.over.median = (Diet.low.in.Vegetables.rate > median(Diet.low.in.Vegetables.rate)), # indicate if death count of low vegetable consumption is over its median
-    grain.over.median = (Diet.low.in.whole.grains.rate > median(Diet.low.in.whole.grains.rate)),
-    nutseed.over.median = (Diet.low.in.nuts.and.seeds.rate > median(Diet.low.in.nuts.and.seeds.rate)),
-    sodium.over.median = (Diet.high.in.sodium.rate > median(Diet.high.in.sodium.rate)) # flag if death count of high sodium consumption is over its median
-)
 ```
 
-Then generate an outcome column *`r outcome``* which indicates if it contributes to the mortality more than its median. This variable holds the ground truth to check against the prediction later. Derive the same for the selected diet related variables which generates new columns, indicating if these causes contribute more over their median or not (derived binary variables). These will be the categorical variables to evaluate in the single variable selection process.
-
-## TODO
-- Take categorical variables (year, countries?)
-- Make categorical vars from diet related vars (T/F, over media)
-- Make death contribution rates and reserve them as numeric variables for Naive Bayers and Decision Tree modelling
-- Compare the different prediction methods and scoring (AUC)
-
+### Single variable prediction
+It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see when smoking kills more than obesity.  So we will first generate an outcome column *`r outcome`* which indicates if smoking kills more than obesity does (binary value). This variable holds the ground truth to check against the prediction later. The country and year will be the categorical variables to evaluate in the single variable selection process.
 
 Now it is time to separate the data into training (81%), calibration(9%) and test (10%) data.
 
 ```{r get_train_cal_test, echo=TRUE}
+
+df <- df |>
+  mutate(
+    smoking.kills.more = (Smoking.rate > High.body.mass.index.rate)
+)
 
 d <- df
 
@@ -256,12 +247,6 @@ set.seed(729375)
 d$rgroup <- runif(dim(d)[1])
 dTrainAll <- subset(d, rgroup<=0.9)
 dTest <- subset(d, rgroup>0.9)
-
-# names of columns that are categorical type and numerical type
-vars <- setdiff(colnames(dTrainAll), c(outcome, 'rgroup'))
-catVars <- vars[sapply(df[,vars], class) %in% c('character', 'logical', 'factor')]
-numericVars <- vars[sapply(df[,vars], class) %in% c('numeric','integer')]
-
 
 # split dTrainAll into a training set and a validation (or calibration) set
 useForCal <- rbinom(n=dim(dTrainAll)[1], size=1, prob=0.1)>0
@@ -276,9 +261,14 @@ print(dim(dTest))
 
 ```
 
-The next step is to iterate through the generated True/False diet related variables and see which one has the best prediction chance. Here the null model is saying the prediction will be the overall proportion of True values, regardless what input it receives. Therefore, anything that is selected should help predict the result better than this null model. 
+The next step is to go through the categorical variables and see which one has the best prediction chance. Here the null model is saying the prediction will be the overall proportion of True values, regardless what input it receives. Therefore, anything that is selected should help predict the result better than this model does. 
 
-```{r single_var_compare, echo=TRUE, warning=FALSE}
+```{r catVars_compare, echo=TRUE, warning=FALSE}
+
+# names of columns that are categorical type and numerical type
+vars <- setdiff(colnames(dTrainAll), c(outcome, 'rgroup'))
+catVars <- vars[sapply(df[,vars], class) %in% c('character', 'logical', 'factor')]
+
 mkPredC <- function(outCol, varCol, appCol) {
   pPos <- sum(outCol==pos)/length(outCol)
   naTab <- table(as.factor(outCol[is.na(varCol)]))
@@ -306,6 +296,9 @@ logLikelihood <- function(ypred, ytrue) {
 }
 
 # Compute the likelihood of the Null model on the calibration
+pred.Null <- sum(dTrain[,outcome]==pos)/nrow(dTrain)
+cat("Proportion of outcome == True in dTrain:", pred.Null)
+
 logNull <- logLikelihood(sum(dCal[,outcome]==pos)/nrow(dCal), dCal[,outcome]==pos)
 cat("The log likelihood of the Null model is:", logNull)
 
@@ -314,6 +307,7 @@ selCatVars <- c()
 for (v in catVars) {
   pi <- paste('pred.', v, sep='')
   logPred <- logLikelihood(dCal[,pi], dCal[,outcome]==pos)
+  cat(sprintf("%6s, log likelihood of: %g\n", v, logPred))
   devDrop <- 2*(logPred - logNull)
   
   cat(sprintf("%6s, deviance reduction: %g\n", v, devDrop))
@@ -325,13 +319,11 @@ cat(sprintf("%6s, To compare, deviance reduction of the ground truth is: %g\n", 
 
 ```
 
-Now let's check the result of best variable with 100 fold cross-validation.
-
-
-
 Now use all numerical variables for prediction and see which one performs the best to predict contribution of death from `r outcome`.
 
 ```{r selnumVar, echo=TRUE, warning=FALSE}
+numericVars <- vars[sapply(df[,vars], class) %in% c('numeric','integer')]
+
 # get all percentage / rate variables 
 rateVars <- grep("\\.rate$", numericVars, value = TRUE)
 
@@ -368,7 +360,7 @@ for (v in rateVars) {
 
 ```
 
-Now that both types of variables are shortlisted, let us see how it performs using AUC in calibration and test dataset.
+Now that both types of variables are shortlisted, let us see how it performs using AUC in calibration and test dataset. Also check the result with 100 fold cross-validation.
 
 ```{r evaluate, echo=TRUE}
 library(ROCR)
@@ -391,6 +383,10 @@ for(v in selVars) {
   }
 }
 
+pred.Null <- rep(pred.Null, nrow(dCal))
+aucNull <- calcAUC(pred.Null, dCal[,outcome])
+cat(sprintf("AUC of null model in calibration is: %g\n", aucNull))
+
 # Run 100-fold cross validation
 vars <- catVars
 
@@ -408,15 +404,11 @@ for (var in vars) {
 
 ```
 
-In the result, all diet related variables perform poorly as they only have 50% chance of getting True or False. That is not better than a random guessing. In the meantime, three variables seem to be most helpful, although their AUC values are not very high (0.8+) either: 
 
-- pred.**Unsafe.sanitation**.rate: trainAUC: 0.551; calibrationAUC: 0.530
-- pred.**Diet.low.in.nuts.and.seeds**.rate: trainAUC: 0.515; calibrationAUC: 0.549
-- pred.**Non.exclusive.breastfeeding**.rate: trainAUC: 0.506; calibrationAUC: 0.514
 
 ```{r double_density_cat, echo=TRUE}
 
-fig1 <- ggplot(dCal) + geom_density(aes(x=pred.fruit.over.median, color=as.factor(sodium.over.median)))
-print(fig1)
+# fig1 <- ggplot(dCal) + geom_density(aes(x=pred.fruit.over.median, color=as.factor(sodium.over.median)))
+# print(fig1)
 ```
 
