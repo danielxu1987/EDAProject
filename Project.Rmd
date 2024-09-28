@@ -207,28 +207,25 @@ pos <- TRUE # positive value indicator
 
 ### Classfication 
 
-We would like to predict the death cause that have large impact worldwide.
+We would like to know more about the death cause that have large impact worldwide. Since the absolute number of mortality can vary largely depending on the population of a country, a better measurement is the percentage of each death cause, with respect to the total casualties in that row. 
 
-However, since the absolute number of mortality can vary largely depending on the population of a country, a better measurement is the percentage of each death cause, with respect to the total casualties in that row. For example, if the people died from taking too much sodium weighs more than its normal weight, there may be something happening in the supply of food for that time in a country. 
-
-In the pre-processing stage, we will create a rate where it counts the percentage or weight of each specific variable. Then generate an outcome column *`r outcome``* which indicates if it contributes to the mortality more than its median. This variable holds the ground truth to check against the prediction later. Derive the same for the selected diet related variables which generates new columns, indicating if these causes contribute more over their median or not (derived binary variables). These will be the categorical variables to evaluate in the single variable selection process.
-
-## TODO
-- Take categorical variables (year, countries?)
-- Make categorical vars from diet related vars (T/F, over media)
-- Make death contribution rates and reserve them as numeric variables for Naive Bayers and Decision Tree modelling
-- Compare the different prediction methods and scoring (AUC)
+We will first create a rate where it counts the percentage or weight of each specific casuality cause
 
 ```{r addCat, echo=TRUE}
 df$Entity <- as.factor(df$Entity)
 df$Year <- as.factor(df$Year)
 
-#df_v2 <- df_num
 df$total.mortality <- rowSums(df[numericVars])
 
 for (col in numericVars) {
     df[paste0(col, ".rate")] <- df[col] / df['total.mortality']
 }
+
+rateVars <- grep("\\.rate$", names(df), value = TRUE)
+
+figRateAll <- ggplot(stack(df[rateVars])) + geom_boxplot(mapping = aes(x = ind, y = values)) + labs(x ='', y='Weight in total mortality') + coord_flip() 
+
+print(figRateAll)
 
 df <- df |>
   mutate(
@@ -237,8 +234,17 @@ df <- df |>
     grain.over.median = (Diet.low.in.whole.grains.rate > median(Diet.low.in.whole.grains.rate)),
     nutseed.over.median = (Diet.low.in.nuts.and.seeds.rate > median(Diet.low.in.nuts.and.seeds.rate)),
     sodium.over.median = (Diet.high.in.sodium.rate > median(Diet.high.in.sodium.rate)) # flag if death count of high sodium consumption is over its median
-  )
+)
 ```
+
+Then generate an outcome column *`r outcome``* which indicates if it contributes to the mortality more than its median. This variable holds the ground truth to check against the prediction later. Derive the same for the selected diet related variables which generates new columns, indicating if these causes contribute more over their median or not (derived binary variables). These will be the categorical variables to evaluate in the single variable selection process.
+
+## TODO
+- Take categorical variables (year, countries?)
+- Make categorical vars from diet related vars (T/F, over media)
+- Make death contribution rates and reserve them as numeric variables for Naive Bayers and Decision Tree modelling
+- Compare the different prediction methods and scoring (AUC)
+
 
 Now it is time to separate the data into training (81%), calibration(9%) and test (10%) data.
 
@@ -411,6 +417,6 @@ In the result, all diet related variables perform poorly as they only have 50% c
 ```{r double_density_cat, echo=TRUE}
 
 fig1 <- ggplot(dCal) + geom_density(aes(x=pred.fruit.over.median, color=as.factor(sodium.over.median)))
-
+print(fig1)
 ```
 
