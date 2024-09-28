@@ -359,6 +359,9 @@ process and findings of EDA based on the <strong>Countries and Death
 Causes</strong> dataset.</p>
 <pre><code>## 
 ## Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>## The following object is masked from &#39;package:gridExtra&#39;:
+## 
+##     combine</code></pre>
 <pre><code>## The following objects are masked from &#39;package:stats&#39;:
 ## 
 ##     filter, lag</code></pre>
@@ -1281,20 +1284,20 @@ print(count_empty(df))</code></pre>
 ##  690</code></pre>
 <pre class="r"><code>empty_rows &lt;- df[df$Code == &#39;&#39;, ]
 print(empty_rows[sample(nrow(empty_rows), size = 6, replace = F), c(1:6)])</code></pre>
-<pre><code>##                               Entity Code Year Outdoor.air.pollution
-## 1805                         England      1994                 32788
-## 6743  World Bank Upper Middle Income      2012               1894297
-## 2144                             G20      2003               2342656
-## 2008      Europe &amp; Central Asia (WB)      2017                445145
-## 3739 Middle East &amp; North Africa (WB)      2008                223553
-## 2006      Europe &amp; Central Asia (WB)      2015                485925
+<pre><code>##                                  Entity Code Year Outdoor.air.pollution
+## 4849       Region of the Americas (WHO)      2008                222215
+## 2030              European Region (WHO)      2009                562023
+## 1702 Eastern Mediterranean Region (WHO)      2011                325320
+## 6683              World Bank Low Income      2012                103561
+## 2149                                G20      2008               2639524
+## 1698 Eastern Mediterranean Region (WHO)      2007                283421
 ##      High.systolic.blood.pressure Diet.high.in.sodium
-## 1805                       143776                8140
-## 6743                      4106166             1013240
-## 2144                      6056632             1224887
-## 2008                      2274397              273374
-## 3739                       458503               17084
-## 2006                      2296772              277092</code></pre>
+## 4849                       990675              113333
+## 2030                      2350346              287544
+## 1702                       694807               39989
+## 6683                       409957               59392
+## 2149                      6320179             1264621
+## 1698                       627501               35519</code></pre>
 <p>Since the Entity variable has no missing value and shows clear label
 of the region/country, we decide to drop the <em>Code</em> column for a
 cleaner dataset.</p>
@@ -1302,22 +1305,23 @@ cleaner dataset.</p>
 </div>
 <div id="classfication" class="section level3">
 <h3>Classfication</h3>
-<p>We would like to predict <strong>sodium.over.median</strong>. In the
-pairwise scatterplot from previous section it was clear that several
-diet related causes have a stronger linear correlation. Therefore we
-would like to pick these variables in dietFeatureVars
-Diet.low.in.whole.grains, Diet.low.in.fruits, Diet.low.in.Vegetables,
-Diet.low.in.nuts.and.seeds</p>
-<p>In the pre-processing stage, We will create a rate where it counts
-the percentage or weight of each specific variable, with respect to the
-total death count from all causes in that row. Then generate an outcome
-column <em>sodium.over.median`</em> which indicates if it contributes to
-the mortality weight more than its median. This variable holds the
-ground truth to check against the prediction later. Do the same for
-selected variables which generate new columns, indicating if these
-causes contribute more over their median weight or not. These will be
-the categorical variables to evaluate in the single variable selection
-process.</p>
+<p>We would like to predict the death cause that have large impact
+worldwide.</p>
+<p>However, since the absolute number of mortality can vary largely
+depending on the population of a country, a better measurement is the
+percentage of each death cause, with respect to the total casualties in
+that row. For example, if the people died from taking too much sodium
+weighs more than its normal weight, there may be something happening in
+the supply of food for that time in a country.</p>
+<p>In the pre-processing stage, we will create a rate where it counts
+the percentage or weight of each specific variable. Then generate an
+outcome column <em>sodium.over.median`</em> which indicates if it
+contributes to the mortality more than its median. This variable holds
+the ground truth to check against the prediction later. Derive the same
+for the selected diet related variables which generates new columns,
+indicating if these causes contribute more over their median or not
+(derived binary variables). These will be the categorical variables to
+evaluate in the single variable selection process.</p>
 </div>
 <div id="todo" class="section level2">
 <h2>TODO</h2>
@@ -1391,8 +1395,7 @@ model.</p>
 }
 
 # now go through all the categorical variables in the `catVars` vector
-# and perform the predictions. The outputs are stored back into the
-# data frame.
+# and perform the predictions. 
 for (v in catVars) {
   pi &lt;- paste(&#39;pred.&#39;, v, sep=&#39;&#39;)
   dTrain[,pi] &lt;- mkPredC(dTrain[,outcome], dTrain[,v], dTrain[,v])
@@ -1409,32 +1412,33 @@ logLikelihood &lt;- function(ypred, ytrue) {
 logNull &lt;- logLikelihood(sum(dCal[,outcome]==pos)/nrow(dCal), dCal[,outcome]==pos)
 cat(&quot;The log likelihood of the Null model is:&quot;, logNull)</code></pre>
 <pre><code>## The log likelihood of the Null model is: -424.2028</code></pre>
-<pre class="r"><code>## The log likelihood of the Null model is -424.2028
-
-# selCatVars is a vector that keeps the names of the top performing categorical variables.
-selCatVars &lt;- c()
-minDrop &lt;- 0.5  
+<pre class="r"><code>selCatVars &lt;- c()
 
 for (v in catVars) {
   pi &lt;- paste(&#39;pred.&#39;, v, sep=&#39;&#39;)
-  devDrop &lt;- 2*(logLikelihood(dCal[,pi], dCal[,outcome]==pos) - logNull)
-  if (devDrop &gt;= minDrop) {
-    cat(sprintf(&quot;%6s, deviance reduction: %g\n&quot;, v, devDrop))
-    selCatVars &lt;- c(selCatVars, pi)
-  }
+  logPred &lt;- logLikelihood(dCal[,pi], dCal[,outcome]==pos)
+  devDrop &lt;- 2*(logPred - logNull)
+  
+  cat(sprintf(&quot;%6s, deviance reduction: %g\n&quot;, v, devDrop))
+  selCatVars &lt;- c(selCatVars, pi)
 }</code></pre>
-<pre><code>## fruit.over.median, deviance reduction: 0.586775</code></pre>
+<pre><code>## Entity, deviance reduction: -2943.84
+##   Year, deviance reduction: -6.9684
+## fruit.over.median, deviance reduction: 0.586775
+## vege.over.median, deviance reduction: -0.171683
+## grain.over.median, deviance reduction: -0.0385751
+## nutseed.over.median, deviance reduction: -0.08469</code></pre>
 <pre class="r"><code>devDrop &lt;- 2*(logLikelihood(dCal[,outcome], dCal[,outcome]==pos) - logNull)
-cat(sprintf(&quot;%6s, deviance reduction of ground truth is: %g\n&quot;, outcome, devDrop))</code></pre>
-<pre><code>## sodium.over.median, deviance reduction of ground truth is: 848.406</code></pre>
+cat(sprintf(&quot;%6s, To compare, deviance reduction of the ground truth is: %g\n&quot;, outcome, devDrop))</code></pre>
+<pre><code>## sodium.over.median, To compare, deviance reduction of the ground truth is: 848.406</code></pre>
+<p>Now let’s check the result of best variable with 100 fold
+cross-validation.</p>
 <p>Now use all numerical variables for prediction and see which one
 performs the best to predict contribution of death from
 sodium.over.median.</p>
 <pre class="r"><code># get all percentage / rate variables 
 rateVars &lt;- grep(&quot;\\.rate$&quot;, numericVars, value = TRUE)
 
-# for numerical variables, we convert them into categorical one and
-# call the `mkPredC` function
 mkPredN &lt;- function(outCol, varCol, appCol) {
   cuts &lt;- unique(as.numeric(
     quantile(varCol, probs=seq(0, 1, 0.1), na.rm=T)))
@@ -1443,7 +1447,7 @@ mkPredN &lt;- function(outCol, varCol, appCol) {
   mkPredC(outCol, varC, appC)
 }
 
-# now go through all the diet related numerical variables in the `numericVars` vector and perform the predictions. Again, the outputs are stored back into the data frame.
+# now go through all the diet related numerical variables in the `numericVars` vector and perform the predictions.
 for (v in rateVars) {
   pi &lt;- paste(&#39;pred.&#39;, v, sep=&#39;&#39;)
   dTrain[,pi] &lt;- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
@@ -1453,15 +1457,46 @@ for (v in rateVars) {
 
 # selNumVars is a vector that keeps the names of the top performing numerical variables.
 selNumVars &lt;- c()
+minDrop &lt;- 0
 
 for (v in rateVars) {
   pi &lt;- paste(&#39;pred.&#39;, v, sep=&#39;&#39;)
-  devDrop &lt;- 2*(logLikelihood(dCal[,pi], dCal[,outcome]==pos) - logNull)
-  if (devDrop &gt;= minDrop) {
+  logPred &lt;- logLikelihood(dCal[,pi], dCal[,outcome]==pos)
+  
+  devDrop &lt;- 2*(logPred - logNull)
+  #if (devDrop &gt;= minDrop) {
     cat(sprintf(&quot;%6s, deviance reduction: %g\n&quot;, v, devDrop))
     selNumVars &lt;- c(selNumVars, pi)
-  }
+  #}
 }</code></pre>
+<pre><code>## Outdoor.air.pollution.rate, deviance reduction: -180.988
+## High.systolic.blood.pressure.rate, deviance reduction: -686.912
+## Diet.high.in.sodium.rate, deviance reduction: -Inf
+## Diet.low.in.whole.grains.rate, deviance reduction: -532.742
+## Alochol.use.rate, deviance reduction: -378.33
+## Diet.low.in.fruits.rate, deviance reduction: -259.212
+## Unsafe.water.source.rate, deviance reduction: -98.1025
+## Secondhand.smoke.rate, deviance reduction: -570.677
+## Low.birth.weight.rate, deviance reduction: -206.826
+## Child.wasting.rate, deviance reduction: -74.4136
+## Unsafe.sex.rate, deviance reduction: -120.627
+## Diet.low.in.nuts.and.seeds.rate, deviance reduction: -158.485
+## Household.air.pollution.from.solid.fuels.rate, deviance reduction: -55.7624
+## Diet.low.in.Vegetables.rate, deviance reduction: -108.265
+## Low.physical.activity.rate, deviance reduction: -410.726
+## Smoking.rate, deviance reduction: -1419.32
+## High.fasting.plasma.glucose.rate, deviance reduction: -416.691
+## Air.pollution.rate, deviance reduction: -101.734
+## High.body.mass.index.rate, deviance reduction: -249.717
+## Unsafe.sanitation.rate, deviance reduction: -37.0631
+## No.access.to.handwashing.facility.rate, deviance reduction: -132.676
+## Drug.use.rate, deviance reduction: -232.749
+## Low.bone.mineral.density.rate, deviance reduction: -112.071
+## Vitamin.A.deficiency.rate, deviance reduction: -129.914
+## Child.stunting.rate, deviance reduction: -77.2228
+## Discontinued.breastfeeding.rate, deviance reduction: -125.51
+## Non.exclusive.breastfeeding.rate, deviance reduction: -52.9078
+## Iron.deficiency.rate, deviance reduction: -122.344</code></pre>
 <p>Now that both types of variables are shortlisted, let us see how it
 performs using AUC in calibration and test dataset.</p>
 <pre class="r"><code>library(ROCR)
@@ -1476,18 +1511,39 @@ selVars &lt;- c(selCatVars, selNumVars)
 for(v in selVars) {
   pi &lt;- v
   aucTrain &lt;- calcAUC(dTrain[,pi], dTrain[,outcome])
-  if (aucTrain &gt;= 0.5) {
+  if (aucTrain &gt;= 0.51) {
     aucCal &lt;- calcAUC(dCal[,pi], dCal[,outcome])
     print(sprintf(
       &quot;%s: trainAUC: %4.3f; calibrationAUC: %4.3f&quot;,
       pi, aucTrain, aucCal))
   }
 }</code></pre>
-<pre><code>## [1] &quot;pred.fruit.over.median: trainAUC: 0.500; calibrationAUC: 0.502&quot;</code></pre>
+<pre><code>## [1] &quot;pred.Diet.low.in.nuts.and.seeds.rate: trainAUC: 0.515; calibrationAUC: 0.549&quot;
+## [1] &quot;pred.Unsafe.sanitation.rate: trainAUC: 0.551; calibrationAUC: 0.530&quot;</code></pre>
+<pre class="r"><code># Run 100-fold cross validation
+vars &lt;- catVars
+
+for (var in vars) {
+  aucs &lt;- rep(0,100)
+  for (rep in 1:length(aucs)) {
+    useForCalRep &lt;- rbinom(n=nrow(dTrainAll), size=1, prob=0.1) &gt; 0
+    predRep &lt;- mkPredC(dTrainAll[!useForCalRep, outcome],
+    dTrainAll[!useForCalRep, var],
+    dTrainAll[useForCalRep, var])
+    aucs[rep] &lt;- calcAUC(predRep, dTrainAll[useForCalRep, outcome])
+  }
+  print(sprintf(&quot;%s: mean: %4.3f; sd: %4.3f&quot;, var, mean(aucs), sd(aucs)))
+}</code></pre>
+<pre><code>## [1] &quot;Entity: mean: 0.458; sd: 0.022&quot;
+## [1] &quot;Year: mean: 0.497; sd: 0.024&quot;
+## [1] &quot;fruit.over.median: mean: 0.500; sd: 0.002&quot;
+## [1] &quot;vege.over.median: mean: 0.500; sd: 0.001&quot;
+## [1] &quot;grain.over.median: mean: 0.500; sd: 0.001&quot;
+## [1] &quot;nutseed.over.median: mean: 0.500; sd: 0.001&quot;</code></pre>
 <p>In the result, all diet related variables perform poorly as they only
 have 50% chance of getting True or False. That is not better than a
-random guessing. iI the meantime, three variables seem to be most
-helpful, although their AUC values are not high (0.8+) either:</p>
+random guessing. In the meantime, three variables seem to be most
+helpful, although their AUC values are not very high (0.8+) either:</p>
 <ul>
 <li>pred.<strong>Unsafe.sanitation</strong>.rate: trainAUC: 0.551;
 calibrationAUC: 0.530</li>
@@ -1496,6 +1552,7 @@ calibrationAUC: 0.530</li>
 <li>pred.<strong>Non.exclusive.breastfeeding</strong>.rate: trainAUC:
 0.506; calibrationAUC: 0.514</li>
 </ul>
+<pre class="r"><code>fig1 &lt;- ggplot(dCal) + geom_density(aes(x=pred.fruit.over.median, color=as.factor(sodium.over.median)))</code></pre>
 </div>
 
 

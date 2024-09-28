@@ -10,8 +10,8 @@ This is the R Notebook for the project from Sifeng Xu, 24525844 for unit *CITS40
 # Load  libraries
 # library(shiny)
 # library(shinyWidgets)
-# library(ggplot2)
-# library(gridExtra)
+library(ggplot2)
+library(gridExtra)
 library(knitr)
 library(dplyr)
 
@@ -207,9 +207,11 @@ pos <- TRUE # positive value indicator
 
 ### Classfication 
 
-We would like to predict **`r outcome`**. In the pairwise scatterplot from previous section it was clear that several diet related causes have a stronger linear correlation. Therefore we would like to pick these variables in dietFeatureVars `r dietFeatureVars`
+We would like to predict the death cause that have large impact worldwide.
 
-In the pre-processing stage, We will create a rate where it counts the percentage or weight of each specific variable, with respect to the total death count from all causes in that row. Then generate an outcome column *`r outcome``* which indicates if it contributes to the mortality weight more than its median. This variable holds the ground truth to check against the prediction later. Do the same for selected variables which generate new columns, indicating if these causes contribute more over their median weight or not. These will be the categorical variables to evaluate in the single variable selection process.
+However, since the absolute number of mortality can vary largely depending on the population of a country, a better measurement is the percentage of each death cause, with respect to the total casualties in that row. For example, if the people died from taking too much sodium weighs more than its normal weight, there may be something happening in the supply of food for that time in a country. 
+
+In the pre-processing stage, we will create a rate where it counts the percentage or weight of each specific variable. Then generate an outcome column *`r outcome``* which indicates if it contributes to the mortality more than its median. This variable holds the ground truth to check against the prediction later. Derive the same for the selected diet related variables which generates new columns, indicating if these causes contribute more over their median or not (derived binary variables). These will be the categorical variables to evaluate in the single variable selection process.
 
 ## TODO
 - Take categorical variables (year, countries?)
@@ -284,8 +286,7 @@ mkPredC <- function(outCol, varCol, appCol) {
 }
 
 # now go through all the categorical variables in the `catVars` vector
-# and perform the predictions. The outputs are stored back into the
-# data frame.
+# and perform the predictions. 
 for (v in catVars) {
   pi <- paste('pred.', v, sep='')
   dTrain[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dTrain[,v])
@@ -302,25 +303,25 @@ logLikelihood <- function(ypred, ytrue) {
 logNull <- logLikelihood(sum(dCal[,outcome]==pos)/nrow(dCal), dCal[,outcome]==pos)
 cat("The log likelihood of the Null model is:", logNull)
 
-## The log likelihood of the Null model is -424.2028
-
-# selCatVars is a vector that keeps the names of the top performing categorical variables.
 selCatVars <- c()
-minDrop <- 0.5  
 
 for (v in catVars) {
   pi <- paste('pred.', v, sep='')
-  devDrop <- 2*(logLikelihood(dCal[,pi], dCal[,outcome]==pos) - logNull)
-  if (devDrop >= minDrop) {
-    cat(sprintf("%6s, deviance reduction: %g\n", v, devDrop))
-    selCatVars <- c(selCatVars, pi)
-  }
+  logPred <- logLikelihood(dCal[,pi], dCal[,outcome]==pos)
+  devDrop <- 2*(logPred - logNull)
+  
+  cat(sprintf("%6s, deviance reduction: %g\n", v, devDrop))
+  selCatVars <- c(selCatVars, pi)
 }
 
 devDrop <- 2*(logLikelihood(dCal[,outcome], dCal[,outcome]==pos) - logNull)
-cat(sprintf("%6s, deviance reduction of ground truth is: %g\n", outcome, devDrop))
+cat(sprintf("%6s, To compare, deviance reduction of the ground truth is: %g\n", outcome, devDrop))
 
 ```
+
+Now let's check the result of best variable with 100 fold cross-validation.
+
+
 
 Now use all numerical variables for prediction and see which one performs the best to predict contribution of death from `r outcome`.
 
@@ -328,8 +329,6 @@ Now use all numerical variables for prediction and see which one performs the be
 # get all percentage / rate variables 
 rateVars <- grep("\\.rate$", numericVars, value = TRUE)
 
-# for numerical variables, we convert them into categorical one and
-# call the `mkPredC` function
 mkPredN <- function(outCol, varCol, appCol) {
   cuts <- unique(as.numeric(
     quantile(varCol, probs=seq(0, 1, 0.1), na.rm=T)))
@@ -338,7 +337,7 @@ mkPredN <- function(outCol, varCol, appCol) {
   mkPredC(outCol, varC, appC)
 }
 
-# now go through all the diet related numerical variables in the `numericVars` vector and perform the predictions. Again, the outputs are stored back into the data frame.
+# now go through all the diet related numerical variables in the `numericVars` vector and perform the predictions.
 for (v in rateVars) {
   pi <- paste('pred.', v, sep='')
   dTrain[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
@@ -348,14 +347,17 @@ for (v in rateVars) {
 
 # selNumVars is a vector that keeps the names of the top performing numerical variables.
 selNumVars <- c()
+minDrop <- 0
 
 for (v in rateVars) {
   pi <- paste('pred.', v, sep='')
-  devDrop <- 2*(logLikelihood(dCal[,pi], dCal[,outcome]==pos) - logNull)
-  if (devDrop >= minDrop) {
+  logPred <- logLikelihood(dCal[,pi], dCal[,outcome]==pos)
+  
+  devDrop <- 2*(logPred - logNull)
+  #if (devDrop >= minDrop) {
     cat(sprintf("%6s, deviance reduction: %g\n", v, devDrop))
     selNumVars <- c(selNumVars, pi)
-  }
+  #}
 }
 
 ```
@@ -375,7 +377,7 @@ selVars <- c(selCatVars, selNumVars)
 for(v in selVars) {
   pi <- v
   aucTrain <- calcAUC(dTrain[,pi], dTrain[,outcome])
-  if (aucTrain >= 0.5) {
+  if (aucTrain >= 0.51) {
     aucCal <- calcAUC(dCal[,pi], dCal[,outcome])
     print(sprintf(
       "%s: trainAUC: %4.3f; calibrationAUC: %4.3f",
@@ -383,11 +385,32 @@ for(v in selVars) {
   }
 }
 
+# Run 100-fold cross validation
+vars <- catVars
+
+for (var in vars) {
+  aucs <- rep(0,100)
+  for (rep in 1:length(aucs)) {
+    useForCalRep <- rbinom(n=nrow(dTrainAll), size=1, prob=0.1) > 0
+    predRep <- mkPredC(dTrainAll[!useForCalRep, outcome],
+    dTrainAll[!useForCalRep, var],
+    dTrainAll[useForCalRep, var])
+    aucs[rep] <- calcAUC(predRep, dTrainAll[useForCalRep, outcome])
+  }
+  print(sprintf("%s: mean: %4.3f; sd: %4.3f", var, mean(aucs), sd(aucs)))
+}
+
 ```
 
-In the result, all diet related variables perform poorly as they only have 50% chance of getting True or False. That is not better than a random guessing. iI the meantime, three variables seem to be most helpful, although their AUC values are not high (0.8+) either: 
+In the result, all diet related variables perform poorly as they only have 50% chance of getting True or False. That is not better than a random guessing. In the meantime, three variables seem to be most helpful, although their AUC values are not very high (0.8+) either: 
 
 - pred.**Unsafe.sanitation**.rate: trainAUC: 0.551; calibrationAUC: 0.530
 - pred.**Diet.low.in.nuts.and.seeds**.rate: trainAUC: 0.515; calibrationAUC: 0.549
 - pred.**Non.exclusive.breastfeeding**.rate: trainAUC: 0.506; calibrationAUC: 0.514
+
+```{r double_density_cat, echo=TRUE}
+
+fig1 <- ggplot(dCal) + geom_density(aes(x=pred.fruit.over.median, color=as.factor(sodium.over.median)))
+
+```
 
