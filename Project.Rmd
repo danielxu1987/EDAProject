@@ -193,26 +193,23 @@ empty_rows <- df[df$Code == '', ]
 print(empty_rows[sample(nrow(empty_rows), size = 6, replace = F), c(1:6)])
 ```
 
-Since the Entity variable has no missing value and shows clear label of the region/country, we decide to drop the *Code* column for a cleaner dataset.
+Since the Entity variable has no missing value and shows clear label of the region/country, we think it is safe to drop the *Code* column for a cleaner dataset. Also to make it easier to understand Entity is converted to Country.
 
 ```{r rmcode}
 df$Code <- NULL
-```
-
-```{r global, include=FALSE}
-outcome <- c('Smoking.kills.more')
-# sodium.over.median
-pos <- TRUE # positive value indicator
+df$Country <- df$Entity
+df$Entity <- NULL
 ```
 
 ### Classfication 
 
 We would like to know more about the death cause that have large impact worldwide. Since the absolute number of mortality can vary largely depending on the population of a country, a better measurement is the percentage of each death cause, with respect to the total casualties in that row. 
 
-We will first create a rate to count the percentage of each specific casualty cause. Then visualise the stats with boxplot to see the major players worldwide. Also country (entity) and year will be converted to factor.
+We will first create a rate to count the percentage of each specific casualty cause. Then visualise the stats with boxplot to see the major players worldwide. Also country and year will be converted to factor.
 
 ```{r addCat, echo=TRUE}
-df$Entity <- as.factor(df$Entity)
+
+df$Country <- as.factor(df$Country)
 df$Year <- as.factor(df$Year)
 
 df$total.mortality <- rowSums(df[numericVars])
@@ -230,11 +227,14 @@ print(figRateAll)
 ```
 
 ### Single variable prediction
-It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see when smoking kills more than obesity.  So we will first generate an outcome column *`r outcome`* which indicates if smoking kills more than obesity does (binary value). This variable holds the ground truth to check against the prediction later. The country and year will be the categorical variables to evaluate in the single variable selection process.
+It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see when smoking kills more than obesity.  So we will first generate an outcome column which indicates if smoking kills more than obesity does (binary value). This variable holds the ground truth to check against the prediction later. The country and year will be the categorical variables to evaluate in the single variable selection process.
 
 Now it is time to separate the data into training (81%), calibration(9%) and test (10%) data.
 
 ```{r get_train_cal_test, echo=TRUE}
+
+outcome <- c('Smoking.kills.more') # sodium.over.median
+pos <- TRUE # positive value 
 
 df <- df |>
   mutate(
@@ -267,7 +267,7 @@ The next step is to go through the categorical variables and see which one has t
 
 # names of columns that are categorical type and numerical type
 vars <- setdiff(colnames(dTrainAll), c(outcome, 'rgroup'))
-catVars <- vars[sapply(df[,vars], class) %in% c('character', 'factor')]
+catVars <- vars[sapply(df[,vars], class) %in% c('character', 'logical',  'factor')]
 
 mkPredC <- function(outCol, varCol, appCol) {
   pPos <- sum(outCol==pos)/length(outCol)
@@ -315,11 +315,11 @@ for (v in catVars) {
 }
 
 devDrop <- 2*(logLikelihood(dCal[,outcome], dCal[,outcome]==pos) - logNull)
-cat(sprintf("%6s, To compare, deviance reduction of the ground truth is: %g\n", outcome, devDrop))
+cat(sprintf("To compare, deviance reduction of the truth for %6s is: %g\n", outcome, devDrop))
 
 ```
 
-The log likelihood and deviance reduction do not look great in both country and year.  From this perspective they do not help much in predicting the result. Let is check how they perform in the ROC curve.
+The log likelihood and deviance reduction do not look great in either country or year. Let is check how they perform in the ROC curve.
 
 ```{r roc_curve, echo=TRUE}
 library(ROCit)
@@ -333,10 +333,10 @@ plot_roc <- function(predcol, outcol, colour_id=2, overlaid=F) {
 }
 
 plot_roc(dCal$pred.Year, dCal[,outcome]) #Year is red
-plot_roc(dCal$pred.Entity, dCal[,outcome], colour_id=3, overlaid=T) # Entity is green
+plot_roc(dCal$pred.Country, dCal[,outcome], colour_id=3, overlaid=T) # Country is green
 ```
 
-Entity seems to help more than Year since it is always higher than the null model. Now we are going to use all numerical variables for prediction and see which one performs the best to predict `r outcome`.
+Country seems to help more than Year since its AUC value is always higher than the null model. Now we are going to use all numerical variables for prediction and see which one performs the best to predict `r outcome`.
 
 ```{r selnumVar, echo=TRUE, warning=FALSE}
 numericVars <- vars[sapply(df[,vars], class) %in% c('numeric','integer')]
@@ -386,13 +386,10 @@ calcAUC <- function(ypred, ytrue) {
   as.numeric(perf@y.values)
 }
 
-print(selCatVars)
-print(selNumVars)
-
-selVars <- c(selCatVars, selNumVars)
+selVars <- c()
 
 ## Performance of the top performing single variables on the test set:
-for(v in selVars) {
+for(v in c(selCatVars, selNumVars)) {
   pi <- v
   aucTrain <- calcAUC(dTrain[,pi], dTrain[,outcome])
   if (aucTrain > 0.53) {
@@ -404,10 +401,9 @@ for(v in selVars) {
   } 
 }
 
-print(selVars)
-
 # Run 100-fold cross validation
-vars <- c('Entity', 'Unsafe.water.source', 'Diet.low.in.nuts.and.seeds', 'Household.air.pollution.from.solid.fuels', 'No.access.to.handwashing.facility', 'Child.stunting', 'Iron.deficiency')
+vars <- c('Country', 'Unsafe.water.source', 'Diet.low.in.nuts.and.seeds', 'Household.air.pollution.from.solid.fuels', 'No.access.to.handwashing.facility', 'Child.stunting', 'Iron.deficiency')
+
 
 for (var in vars) {
   aucs <- rep(0,100)
@@ -419,22 +415,25 @@ for (var in vars) {
     aucs[rep] <- calcAUC(predRep, dTrainAll[useForCalRep, outcome])
   }
   print(sprintf("%s: mean: %4.3f; sd: %4.3f", var, mean(aucs), sd(aucs)))
+  if(mean(aucs) > 0.5){
+    
+  }
 }
 
 print(selVars)
 
 ```
 
-AFter inspecting the best performing variables a bit more, *Entity* still seems a good relevant feature variable. *Unsafe.water.source* and *Household.air.pollution.from.solid.fuels* barely predict better than 50% with a high standard deviation that makes its performance low. 
+AFter inspecting the best performing variables a bit more, *Country* still seems a good relevant feature variable. *Unsafe.water.source* and *Household.air.pollution.from.solid.fuels* barely predict better than 50% with a high standard deviation that makes its performance low. 
 
-Strange prediction for Entity can be > 1.0??
+Strange prediction for Country can be > 1.0??
 
-```{r double_density_cat, echo=TRUE}
+```{r double_density_cat, include=FALSE}
 
 # outliers <- dCal[dCal$pred.Entity > 1.0, c('Entity', 'Year', 'pred.Entity', 'Smoking.kills.more', 'Smoking', 'High.body.mass.index', 'Smoking.rate', 'High.body.mass.index.rate')]
 # print(outliers)
 
-fig1 <- ggplot(dCal) + geom_density(aes(x=pred.Entity, color=as.factor(Smoking.kills.more)))
+fig1 <- ggplot(dCal) + geom_density(aes(x=pred.Country, color=as.factor(Smoking.kills.more)))
 
 fig2 <- ggplot(dCal) + geom_density(aes(x=pred.Diet.low.in.nuts.and.seeds.rate, color=as.factor(Smoking.kills.more)))
 
@@ -446,10 +445,10 @@ Check the ROC curve for all 3 variables.
 
 ```{r}
 plot_roc(dCal$pred.Unsafe.water.source, dCal[,outcome], colour_id=7) #Water source is gold
-plot_roc(dCal$pred.Entity, dCal[,outcome], colour_id=3, overlaid=T) # Entity is green
+plot_roc(dCal$pred.Country, dCal[,outcome], colour_id=3, overlaid=T) # Country is green
 plot_roc(dCal$pred.Household.air.pollution.from.solid.fuels, dCal[,outcome], colour_id=4, overlaid=T) # household air pollution is blue
 ```
-*Entity* still appears to be the best performer, with *Unsafe.water.source* being the second best and *Household.air.pollution.from.solid.fuels* being the last which predicts less than the null model around $1-Specificity = 0.8$. This means whether or not smoking kills more people than obesity is a country specific issue. We will take these 3 feature variables into the multiple feature model to see if they all together can do a better job. 
+*Country* still appears to be the best performer, with *Unsafe.water.source* being the second best and *Household.air.pollution.from.solid.fuels* being the last which predicts less than the null model around $1-Specificity = 0.8$. This means whether or not smoking kills more people than obesity is a country specific issue. We will take these 3 feature variables into the multiple feature model to see if they all together can do a better job. 
 
 
 ## Decision tree model
