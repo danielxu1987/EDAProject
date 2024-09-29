@@ -1285,19 +1285,19 @@ print(count_empty(df))</code></pre>
 <pre class="r"><code>empty_rows &lt;- df[df$Code == &#39;&#39;, ]
 print(empty_rows[sample(nrow(empty_rows), size = 6, replace = F), c(1:6)])</code></pre>
 <pre><code>##                                  Entity Code Year Outdoor.air.pollution
-## 1709 Eastern Mediterranean Region (WHO)      2018                392799
-## 1704 Eastern Mediterranean Region (WHO)      2013                349814
-## 6575       Western Pacific Region (WHO)      1994                825735
-## 1699 Eastern Mediterranean Region (WHO)      2008                296106
-## 4857       Region of the Americas (WHO)      2016                227309
-## 6646             World Bank High Income      2005                405237
+## 6738     World Bank Upper Middle Income      2007               1676385
+## 4239                 North America (WB)      1998                111276
+## 6656             World Bank High Income      2015                354094
+## 1697 Eastern Mediterranean Region (WHO)      2006                273795
+## 4258                 North America (WB)      2017                 62260
+## 6702     World Bank Lower Middle Income      2001                960894
 ##      High.systolic.blood.pressure Diet.high.in.sodium
-## 1709                       842134               48144
-## 1704                       735988               42137
-## 6575                      1730283              670898
-## 1699                       646385               36967
-## 4857                      1144572              132947
-## 6646                      1779693              208352</code></pre>
+## 6738                      3698368              926489
+## 4239                       555869               40202
+## 6656                      1753828              210443
+## 1697                       613418               34326
+## 4258                       505475               49754
+## 6702                      2451486              319114</code></pre>
 <p>Since the Entity variable has no missing value and shows clear label
 of the region/country, we think it is safe to drop the <em>Code</em>
 column for a cleaner dataset. Also to make it easier to understand
@@ -1528,10 +1528,22 @@ for(v in c(selCatVars, selNumVars)) {
 ## [1] &quot;pred.Child.stunting: trainAUC: 0.532; calibrationAUC: 0.504&quot;
 ## [1] &quot;pred.Iron.deficiency: trainAUC: 0.544; calibrationAUC: 0.506&quot;</code></pre>
 <pre class="r"><code># Run 100-fold cross validation
-vars &lt;- c(&#39;Country&#39;, &#39;Unsafe.water.source&#39;, &#39;Diet.low.in.nuts.and.seeds&#39;, &#39;Household.air.pollution.from.solid.fuels&#39;, &#39;No.access.to.handwashing.facility&#39;, &#39;Child.stunting&#39;, &#39;Iron.deficiency&#39;)
+original_vars &lt;- character() #sub(&quot;^pred\\.&quot;, &quot;&quot;, selVars)
 
-
-for (var in vars) {
+cat(&quot;Performance of the top performing single variables on the test set:&quot;)</code></pre>
+<pre><code>## Performance of the top performing single variables on the test set:</code></pre>
+<pre class="r"><code>for (v in selVars) {
+  # retrieve the original variable name (character location 6 onward)
+  orig_v &lt;- substring(v, 6)
+  original_vars &lt;- c(original_vars, orig_v)
+  cat(sprintf(&quot;Variable %6s: AUC = %g\n&quot;, orig_v, calcAUC(dTest[,v], dTest[,outcome]==pos)))
+}</code></pre>
+<pre><code>## Variable Country: AUC = 0.521562
+## Variable Unsafe.water.source: AUC = 0.537839
+## Variable Household.air.pollution.from.solid.fuels: AUC = 0.59013
+## Variable Child.stunting: AUC = 0.539558
+## Variable Iron.deficiency: AUC = 0.488286</code></pre>
+<pre class="r"><code>for (var in original_vars) {
   aucs &lt;- rep(0,100)
   for (rep in 1:length(aucs)) {
     useForCalRep &lt;- rbinom(n=nrow(dTrainAll), size=1, prob=0.1) &gt; 0
@@ -1541,23 +1553,25 @@ for (var in vars) {
     aucs[rep] &lt;- calcAUC(predRep, dTrainAll[useForCalRep, outcome])
   }
   print(sprintf(&quot;%s: mean: %4.3f; sd: %4.3f&quot;, var, mean(aucs), sd(aucs)))
-  if(mean(aucs) &gt; 0.5){
-    
+  if(mean(aucs) &lt;= 0.5){
+    original_vars &lt;- setdiff(original_vars, var)
   }
 }</code></pre>
 <pre><code>## [1] &quot;Country: mean: 0.561; sd: 0.022&quot;
 ## [1] &quot;Unsafe.water.source: mean: 0.504; sd: 0.025&quot;
-## [1] &quot;Diet.low.in.nuts.and.seeds: mean: 0.499; sd: 0.025&quot;
-## [1] &quot;Household.air.pollution.from.solid.fuels: mean: 0.503; sd: 0.025&quot;
-## [1] &quot;No.access.to.handwashing.facility: mean: 0.492; sd: 0.024&quot;
-## [1] &quot;Child.stunting: mean: 0.494; sd: 0.028&quot;
-## [1] &quot;Iron.deficiency: mean: 0.485; sd: 0.025&quot;</code></pre>
+## [1] &quot;Household.air.pollution.from.solid.fuels: mean: 0.504; sd: 0.022&quot;
+## [1] &quot;Child.stunting: mean: 0.497; sd: 0.025&quot;
+## [1] &quot;Iron.deficiency: mean: 0.486; sd: 0.024&quot;</code></pre>
 <pre class="r"><code>print(selVars)</code></pre>
 <pre><code>## [1] &quot;pred.Country&quot;                                 
 ## [2] &quot;pred.Unsafe.water.source&quot;                     
 ## [3] &quot;pred.Household.air.pollution.from.solid.fuels&quot;
 ## [4] &quot;pred.Child.stunting&quot;                          
 ## [5] &quot;pred.Iron.deficiency&quot;</code></pre>
+<pre class="r"><code>print(original_vars)</code></pre>
+<pre><code>## [1] &quot;Country&quot;                                 
+## [2] &quot;Unsafe.water.source&quot;                     
+## [3] &quot;Household.air.pollution.from.solid.fuels&quot;</code></pre>
 <p>AFter inspecting the best performing variables a bit more,
 <em>Country</em> still seems a good relevant feature variable.
 <em>Unsafe.water.source</em> and

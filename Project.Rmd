@@ -402,10 +402,18 @@ for(v in c(selCatVars, selNumVars)) {
 }
 
 # Run 100-fold cross validation
-vars <- c('Country', 'Unsafe.water.source', 'Diet.low.in.nuts.and.seeds', 'Household.air.pollution.from.solid.fuels', 'No.access.to.handwashing.facility', 'Child.stunting', 'Iron.deficiency')
+original_vars <- character() #sub("^pred\\.", "", selVars)
 
+cat("Performance of the top performing single variables on the test set:")
 
-for (var in vars) {
+for (v in selVars) {
+  # retrieve the original variable name (character location 6 onward)
+  orig_v <- substring(v, 6)
+  original_vars <- c(original_vars, orig_v)
+  cat(sprintf("Variable %6s: AUC = %g\n", orig_v, calcAUC(dTest[,v], dTest[,outcome]==pos)))
+}
+
+for (var in original_vars) {
   aucs <- rep(0,100)
   for (rep in 1:length(aucs)) {
     useForCalRep <- rbinom(n=nrow(dTrainAll), size=1, prob=0.1) > 0
@@ -415,16 +423,17 @@ for (var in vars) {
     aucs[rep] <- calcAUC(predRep, dTrainAll[useForCalRep, outcome])
   }
   print(sprintf("%s: mean: %4.3f; sd: %4.3f", var, mean(aucs), sd(aucs)))
-  if(mean(aucs) > 0.5){
-    
+  if(mean(aucs) <= 0.5){
+    original_vars <- setdiff(original_vars, var)
   }
 }
 
 print(selVars)
+print(original_vars)
 
 ```
 
-AFter inspecting the best performing variables a bit more, *Country* still seems a good relevant feature variable. *Unsafe.water.source* and *Household.air.pollution.from.solid.fuels* barely predict better than 50% with a high standard deviation that makes its performance low. 
+After inspecting the best performing variables a bit more, *Country* still seems a good relevant feature variable. *Unsafe.water.source* and *Household.air.pollution.from.solid.fuels* barely predict better than 50% with a high standard deviation that makes its performance low. 
 
 Strange prediction for Country can be > 1.0??
 
