@@ -20,7 +20,7 @@ library(dplyr)
 df_original <- read.csv("./Countries and death causes.csv",header = T, sep=",")
 
 df <- df_original
-
+years <- 1990:2019
 dietVars <- c('Diet.low.in.whole.grains', 'Diet.low.in.fruits', 'Diet.low.in.Vegetables', 'Diet.low.in.nuts.and.seeds', 'Diet.high.in.sodium')
 
 dietTargetVar <- c('Diet.high.in.sodium')
@@ -193,28 +193,53 @@ empty_rows <- df[df$Code == '', ]
 print(empty_rows[sample(nrow(empty_rows), size = 6, replace = F), c(1:6)])
 ```
 
-Since the Entity variable has no missing value and shows clear label of the region/country, we think it is safe to drop the *Code* column for a cleaner dataset. Also to make it easier to understand Entity is converted to Country.
+Make it easier to understand the sections below we rename Entity to Country. Also, since we will merge external data into this dataset based on country code, those aggregated entities will not be receiving any data. Therefore we would like to drop them now and keep only data per country, not per group, for further study.
 
 ```{r rmcode}
-df$Code <- NULL
 colnames(df)[1] <- "Country"
+df <- df[df$Code != '', ]
 ```
+
 
 ### Classfication 
 
-We would like to know mroe about the relationship of GDP per capita and death causes per country. So we are going to merge the dataset as provided from [World Bank](https://data.worldbank.org/indicator/NY.GDP.PCAP.CD)
+We feel that the mortality count alone may not tell us much. So we would like to include GDP per capita and country's population. Now we are going to merge the dataset as provided from [World Bank](https://data.worldbank.org/indicator/NY.GDP.PCAP.CD), and check missing values immediately.
 
 ```{r merge_gdp, echo=TRUE}
 library(reshape2)
 
+# merge gdp per capita
 gdp <- read.table('./API_NY.GDP.PCAP.CD_DS2_en_csv_v2_31681/API_NY.GDP.PCAP.CD_DS2_en_csv_v2_31681.csv',header=T, sep=',')
 colnames(gdp) <- gsub("^X", "", colnames(gdp))
 
-gdp <- gdp[, c('Country.Name', years)]
-gdp_df <- melt(gdp, id.vars = "Country.Name", variable.name = "Year", value.name = "gdp_per_capita")
+gdp <- gdp[, c('Country.Code', years)]
+gdp_df <- melt(gdp, id.vars = "Country.Code", variable.name = "Year", value.name = "gdp.per.capita")
 gdp_df$Year <- as.numeric(as.character(gdp_df$Year))
-df_merged_gdp <- merge(df, gdp_df, by.x = c("Country", "Year"), by.y = c("Country.Name", "Year"), all.x = TRUE)
+df_merged_gdp <- merge(df, gdp_df, by.x = c("Code", "Year"), by.y = c("Country.Code", "Year"), all.x = TRUE)
 
+
+# merge total population 
+popl <- read.table('./API_SP.POP.TOTL_DS2_en_csv_v2_31753/API_SP.POP.TOTL_DS2_en_csv_v2_31753.csv',header=T, sep=',')
+colnames(popl) <- gsub("^X", "", colnames(popl))
+
+popl <- popl[, c('Country.Code', years)]
+popl_df <- melt(popl, id.vars = "Country.Code", variable.name = "Year", value.name = "total.population")
+popl_df$Year <- as.numeric(as.character(popl_df$Year))
+df_gdp_popl <- merge(df_merged_gdp, popl_df, by.x = c("Code", "Year"), by.y = c("Country.Code", "Year"), all.x = TRUE)
+
+df_gdp_popl <- df_gdp_popl[, c(1:3, ncol(df_gdp_popl)-1, ncol(df_gdp_popl), 4:(ncol(df_gdp_popl)-2))]
+
+print(count_nas(df_gdp_popl))
+
+nas_df_gdp_popl <- df_gdp_popl[is.na(df_gdp_popl$gdp.per.capita) & is.na(df_gdp_popl$total.population),]
+print(nrow(nas_df_gdp_popl))
+print(nas_df_gdp_popl[sample(nrow(nas_df_gdp_popl), 6), 1:7])
+```
+
+It appears that some islands and the total value of the whole world from the original death causes are also included which results in 150 NAs in both gdp and total population. This is only 2.4% of all dataset. We think it is ok to drop them.
+
+```{r drop_nas, echo=TRUE}
+df_gdp_popl <- setdiff(df_gdp_popl, nas_df_gdp_popl)
 ```
 
 
@@ -488,35 +513,35 @@ plot_roc(dCal$pred.Country, dCal[,outcome], colour_id=3, overlaid=T) # Country i
 
 ```{r nbmodel, echo=TRUE}
 
-#include Year also in NB model
-selVars <- c('pred.Year', selVars)
-
-# proportion of positive instances (outcome == pos) in the training set.
-pPos <- sum(dTrain[,outcome]==pos)/length(dTrain[,outcome])
-
-nBayes <- function(pPos, pf) {
-  # proportion of negative instances (outcome != pos)
-  pNeg <- 1 - pPos
-  smoothingEpsilon <- 1.0e-5
-  scorePos <- log(pPos + smoothingEpsilon) +
-    rowSums(log(pf/pPos + smoothingEpsilon))
-  scoreNeg <- log(pNeg + smoothingEpsilon) +
-    rowSums(log((1-pf)/(1-pPos) + smoothingEpsilon))
-  m <- pmax(scorePos, scoreNeg)
-  expScorePos <- exp(scorePos-m)
-  expScoreNeg <- exp(scoreNeg-m)
-  expScorePos/(expScorePos+expScoreNeg)
-}
-
-dTrain$nbpredl <- nBayes(pPos, dTrain[,selVars])
-dCal$nbpredl <- nBayes(pPos, dCal[,selVars])
-dTest$nbpredl <- nBayes(pPos, dTest[,selVars])
-cat('The AUC value for the training set is:', calcAUC(dTrain$nbpredl, dTrain[,outcome]==pos))
-## The AUC value for the training set for uws and hapfsf is: 0.5575
-
-cat('The AUC value for the calibration set is:', calcAUC(dCal$nbpredl, dCal[,outcome]==pos))
-
-cat('The AUC value for the test set is:', calcAUC(dTest$nbpredl, dTest[,outcome]==pos))
+# #include Year also in NB model
+# selVars <- c('pred.Year', selVars)
+# 
+# # proportion of positive instances (outcome == pos) in the training set.
+# pPos <- sum(dTrain[,outcome]==pos)/length(dTrain[,outcome])
+# 
+# nBayes <- function(pPos, pf) {
+#   # proportion of negative instances (outcome != pos)
+#   pNeg <- 1 - pPos
+#   smoothingEpsilon <- 1.0e-5
+#   scorePos <- log(pPos + smoothingEpsilon) +
+#     rowSums(log(pf/pPos + smoothingEpsilon))
+#   scoreNeg <- log(pNeg + smoothingEpsilon) +
+#     rowSums(log((1-pf)/(1-pPos) + smoothingEpsilon))
+#   m <- pmax(scorePos, scoreNeg)
+#   expScorePos <- exp(scorePos-m)
+#   expScoreNeg <- exp(scoreNeg-m)
+#   expScorePos/(expScorePos+expScoreNeg)
+# }
+# 
+# dTrain$nbpredl <- nBayes(pPos, dTrain[,selVars])
+# dCal$nbpredl <- nBayes(pPos, dCal[,selVars])
+# dTest$nbpredl <- nBayes(pPos, dTest[,selVars])
+# cat('The AUC value for the training set is:', calcAUC(dTrain$nbpredl, dTrain[,outcome]==pos))
+# ## The AUC value for the training set for uws and hapfsf is: 0.5575
+# 
+# cat('The AUC value for the calibration set is:', calcAUC(dCal$nbpredl, dCal[,outcome]==pos))
+# 
+# cat('The AUC value for the test set is:', calcAUC(dTest$nbpredl, dTest[,outcome]==pos))
 
 ```
 
