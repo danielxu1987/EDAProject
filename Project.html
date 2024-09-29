@@ -1284,20 +1284,20 @@ print(count_empty(df))</code></pre>
 ##  690</code></pre>
 <pre class="r"><code>empty_rows &lt;- df[df$Code == &#39;&#39;, ]
 print(empty_rows[sample(nrow(empty_rows), size = 6, replace = F), c(1:6)])</code></pre>
-<pre><code>##                                  Entity Code Year Outdoor.air.pollution
-## 6738     World Bank Upper Middle Income      2007               1676385
-## 4239                 North America (WB)      1998                111276
-## 6656             World Bank High Income      2015                354094
-## 1697 Eastern Mediterranean Region (WHO)      2006                273795
-## 4258                 North America (WB)      2017                 62260
-## 6702     World Bank Lower Middle Income      2001                960894
+<pre><code>##                              Entity Code Year Outdoor.air.pollution
+## 5695        Sub-Saharan Africa (WB)      2014                218346
+## 5682        Sub-Saharan Africa (WB)      2001                131044
+## 4840   Region of the Americas (WHO)      1999                235901
+## 5694        Sub-Saharan Africa (WB)      2013                207067
+## 6587   Western Pacific Region (WHO)      2006               1269444
+## 3165 Latin America &amp; Caribbean (WB)      2004                128259
 ##      High.systolic.blood.pressure Diet.high.in.sodium
-## 6738                      3698368              926489
-## 4239                       555869               40202
-## 6656                      1753828              210443
-## 1697                       613418               34326
-## 4258                       505475               49754
-## 6702                      2451486              319114</code></pre>
+## 5695                       647151               65134
+## 5682                       493191               55119
+## 4840                       988509              102734
+## 5694                       633001               63882
+## 6587                      2306608              785067
+## 3165                       485112               66766</code></pre>
 <p>Since the Entity variable has no missing value and shows clear label
 of the region/country, we think it is safe to drop the <em>Code</em>
 column for a cleaner dataset. Also to make it easier to understand
@@ -1562,24 +1562,16 @@ cat(&quot;Performance of the top performing single variables on the test set:&qu
 ## [1] &quot;Household.air.pollution.from.solid.fuels: mean: 0.504; sd: 0.022&quot;
 ## [1] &quot;Child.stunting: mean: 0.497; sd: 0.025&quot;
 ## [1] &quot;Iron.deficiency: mean: 0.486; sd: 0.024&quot;</code></pre>
-<pre class="r"><code>print(selVars)</code></pre>
-<pre><code>## [1] &quot;pred.Country&quot;                                 
-## [2] &quot;pred.Unsafe.water.source&quot;                     
-## [3] &quot;pred.Household.air.pollution.from.solid.fuels&quot;
-## [4] &quot;pred.Child.stunting&quot;                          
-## [5] &quot;pred.Iron.deficiency&quot;</code></pre>
-<pre class="r"><code>print(original_vars)</code></pre>
-<pre><code>## [1] &quot;Country&quot;                                 
-## [2] &quot;Unsafe.water.source&quot;                     
-## [3] &quot;Household.air.pollution.from.solid.fuels&quot;</code></pre>
-<p>AFter inspecting the best performing variables a bit more,
+<pre class="r"><code># print(selVars)
+# print(original_vars)</code></pre>
+<p>After inspecting the best performing variables a bit more,
 <em>Country</em> still seems a good relevant feature variable.
 <em>Unsafe.water.source</em> and
 <em>Household.air.pollution.from.solid.fuels</em> barely predict better
 than 50% with a high standard deviation that makes its performance
 low.</p>
 <p>Strange prediction for Country can be &gt; 1.0??</p>
-<p>Check the ROC curve for all 3 variables.</p>
+<p>Visualise the ROC curve for all 3 variables.</p>
 <pre class="r"><code>plot_roc(dCal$pred.Unsafe.water.source, dCal[,outcome], colour_id=7) #Water source is gold
 plot_roc(dCal$pred.Country, dCal[,outcome], colour_id=3, overlaid=T) # Country is green
 plot_roc(dCal$pred.Household.air.pollution.from.solid.fuels, dCal[,outcome], colour_id=4, overlaid=T) # household air pollution is blue</code></pre>
