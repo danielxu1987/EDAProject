@@ -1284,20 +1284,20 @@ print(count_empty(df))</code></pre>
 ##  690</code></pre>
 <pre class="r"><code>empty_rows &lt;- df[df$Code == &#39;&#39;, ]
 print(empty_rows[sample(nrow(empty_rows), size = 6, replace = F), c(1:6)])</code></pre>
-<pre><code>##                              Entity Code Year Outdoor.air.pollution
-## 6652         World Bank High Income      2011                374677
-## 1644       East Asia &amp; Pacific (WB)      2013               1710031
-## 1828                        England      2017                 12850
-## 4237             North America (WB)      1996                111733
-## 6742 World Bank Upper Middle Income      2011               1885330
-## 5162                       Scotland      1991                  2697
+<pre><code>##                                  Entity Code Year Outdoor.air.pollution
+## 1696 Eastern Mediterranean Region (WHO)      2005                265150
+## 1626           East Asia &amp; Pacific (WB)      1995                946803
+## 4248                 North America (WB)      2007                 89246
+## 1991         Europe &amp; Central Asia (WB)      2000                604114
+## 3724    Middle East &amp; North Africa (WB)      1993                154751
+## 2153                                G20      2012               2934311
 ##      High.systolic.blood.pressure Diet.high.in.sodium
-## 6652                      1688358              203582
-## 1644                      3460941             1024135
-## 1828                        65448                5247
-## 4237                       554902               38371
-## 6742                      4073797             1004351
-## 5162                        16076                 831</code></pre>
+## 1696                       599674               33123
+## 1626                      2125337              775055
+## 4248                       471151               42902
+## 1991                      2540918              313774
+## 3724                       315817               12728
+## 2153                      6749094             1356248</code></pre>
 <p>Make it easier to understand the sections below we rename Entity to
 Country. Also, since we will merge external data into this dataset based
 on country code, those aggregated entities will not be receiving any
@@ -1333,7 +1333,7 @@ popl_df &lt;- melt(popl, id.vars = &quot;Country.Code&quot;, variable.name = &qu
 popl_df$Year &lt;- as.numeric(as.character(popl_df$Year))
 df_gdp_popl &lt;- merge(df_merged_gdp, popl_df, by.x = c(&quot;Code&quot;, &quot;Year&quot;), by.y = c(&quot;Country.Code&quot;, &quot;Year&quot;), all.x = TRUE)
 
-df_gdp_popl &lt;- df_gdp_popl[, c(1:3, ncol(df_gdp_popl)-1, ncol(df_gdp_popl), 4:(ncol(df_gdp_popl)-2))]
+# df_gdp_popl &lt;- df_gdp_popl[, c(1:3, ncol(df_gdp_popl)-1, ncol(df_gdp_popl), 4:(ncol(df_gdp_popl)-2))]
 
 print(count_nas(df_gdp_popl))</code></pre>
 <pre><code>##   gdp.per.capita total.population 
@@ -1342,25 +1342,42 @@ print(count_nas(df_gdp_popl))</code></pre>
 print(nrow(nas_df_gdp_popl))</code></pre>
 <pre><code>## [1] 150</code></pre>
 <pre class="r"><code>print(nas_df_gdp_popl[sample(nrow(nas_df_gdp_popl), 6), 1:7])</code></pre>
-<pre><code>##          Code Year Country gdp.per.capita total.population
-## 5669      TWN 2018  Taiwan             NA               NA
-## 4215 OWID_WRL 2004   World             NA               NA
-## 5416      TKL 2005 Tokelau             NA               NA
-## 4020      NIU 2019    Niue             NA               NA
-## 4202 OWID_WRL 1991   World             NA               NA
-## 4211 OWID_WRL 2000   World             NA               NA
-##      Outdoor.air.pollution High.systolic.blood.pressure
-## 5669                 11785                        24883
-## 4215               3139873                      8399163
-## 5416                     0                            3
-## 4020                     0                            5
-## 4202               2297976                      6888724
-## 4211               2878034                      7941549</code></pre>
+<pre><code>##          Code Year      Country Outdoor.air.pollution
+## 5412      TKL 2001      Tokelau                     0
+## 5650      TWN 1999       Taiwan                  8442
+## 5409      TKL 1998      Tokelau                     0
+## 1180      COK 1999 Cook Islands                     2
+## 3994      NIU 1993         Niue                     0
+## 4230 OWID_WRL 2019        World               4506193
+##      High.systolic.blood.pressure Diet.high.in.sodium Diet.low.in.whole.grains
+## 5412                            3                   1                        1
+## 5650                        18117                3744                     3038
+## 5409                            3                   1                        1
+## 1180                           28                   5                        4
+## 3994                            6                   1                        1
+## 4230                     10845595             1885356                  1844836</code></pre>
 <p>It appears that some islands and the total value of the whole world
 from the original death causes are also included which results in 150
 NAs in both gdp and total population. This is only 2.4% of all dataset.
 We think it is ok to drop them.</p>
-<pre class="r"><code>df_gdp_popl &lt;- setdiff(df_gdp_popl, nas_df_gdp_popl)</code></pre>
+<pre class="r"><code>df_gdp_popl &lt;- setdiff(df_gdp_popl, nas_df_gdp_popl)
+
+# Our new dataset looks like:
+df_gdp_popl[sample(nrow(df_gdp_popl), 6), 1:6]</code></pre>
+<pre><code>##      Code Year  Country Outdoor.air.pollution High.systolic.blood.pressure
+## 2544  IRQ 2013     Iraq                 22739                        44147
+## 1691  EST 2000  Estonia                   530                         5483
+## 5383  TON 2002    Tonga                    17                           97
+## 532   BGR 2011 Bulgaria                 10468                        46649
+## 1777  FJI 1996     Fiji                   121                         1084
+## 2620  ITA 1999    Italy                 38989                       133891
+##      Diet.high.in.sodium
+## 2544                1474
+## 1691                 231
+## 5383                  19
+## 532                15006
+## 1777                 179
+## 2620               12372</code></pre>
 <p>We would like to know more about the death cause that have large
 impact worldwide. Since the absolute number of mortality can vary
 largely depending on the population of a country, a better measurement

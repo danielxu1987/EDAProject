@@ -231,7 +231,8 @@ df_gdp_popl <- df_gdp_popl[, c(1:3, ncol(df_gdp_popl)-1, ncol(df_gdp_popl), 4:(n
 
 print(count_nas(df_gdp_popl))
 
-nas_df_gdp_popl <- df_gdp_popl[is.na(df_gdp_popl$gdp.per.capita) & is.na(df_gdp_popl$total.population),]
+nas_df_gdp_popl <- df_gdp_popl[is.na(df_gdp_popl$gdp.per.capita) &
+  is.na(df_gdp_popl$total.population),]
 print(nrow(nas_df_gdp_popl))
 print(nas_df_gdp_popl[sample(nrow(nas_df_gdp_popl), 6), 1:7])
 ```
@@ -240,52 +241,60 @@ It appears that some islands and the total value of the whole world from the ori
 
 ```{r drop_nas, echo=TRUE}
 df_gdp_popl <- setdiff(df_gdp_popl, nas_df_gdp_popl)
-```
 
+# Our new dataset looks like:
+df_gdp_popl[sample(nrow(df_gdp_popl), 6), 1:6]
+
+```
 
 We would like to know more about the death cause that have large impact worldwide. Since the absolute number of mortality can vary largely depending on the population of a country, a better measurement is the percentage of each death cause, with respect to the total casualties in that row. 
 
 We will first create a rate to count the percentage of each specific casualty cause. Then visualise the stats with boxplot to see the major players worldwide. Also country and year will be converted to factor.
 
 ```{r addCat, echo=TRUE}
+df_v2 <- df_gdp_popl
 
-df$Country <- as.factor(df$Country)
-df$Year <- as.factor(df$Year)
+df_v2$Country <- as.factor(df_v2$Country)
+df_v2$Year <- as.factor(df_v2$Year)
 
-df$total.mortality <- rowSums(df[numericVars])
+df_v2$total.mortality <- rowSums(df_v2[numericVars])
 
 for (col in numericVars) {
-    df[paste0(col, ".rate")] <- df[col] / df['total.mortality']
+    df_v2[paste0(col, ".rate")] <- df_v2[col] / df_v2['total.mortality']
 }
 
-rateVars <- grep("\\.rate$", names(df), value = TRUE)
+rateVars <- grep("\\.rate$", names(df_v2), value = TRUE)
 
-figRateAll <- ggplot(stack(df[rateVars])) + geom_boxplot(mapping = aes(x = ind, y = values)) + labs(x ='', y='Weight in total mortality') + coord_flip() 
+figRateAll <- ggplot(stack(df_v2[rateVars])) + geom_boxplot(mapping = aes(x = ind, y = values)) + labs(x ='', y='Weight in total mortality') + coord_flip() 
 
 print(figRateAll)
 
+# count the death rate of all causes with respect to the total population
+df_v2$Death.rate <- (df_v2$total.mortality / df_v2$total.population)
 ```
 
 ### Single variable prediction
-It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see when smoking kills more than obesity.  So we will first generate an outcome column which indicates if smoking kills more than obesity does (binary value). This variable holds the ground truth to check against the prediction later. The country and year will be the categorical variables to evaluate in the single variable selection process.
+It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see what makes the death rate of a country over the median of the whole world.  So we will first generate an outcome column which indicates if death rate is higher than the worldwide median. This variable holds the ground truth to check against the prediction later. 
+
+We are also interested in if the higher *Unsafe.sex* and *Alochol.use* have strong correlation with the death rate. So we will also derived binary variables to indicate if their percentage in total mortality is higher than median or not. Code is less self-explanatory than Country so we will remove it. The country and year will be the categorical variables to evaluate in the single variable selection process. 
 
 Now it is time to separate the data into training (81%), calibration(9%) and test (10%) data.
 
 ```{r get_train_cal_test, echo=TRUE}
-library(reshape2)
 
-outcome <- c('Unsafe.sex.kills.more') # Smoking.kills.more, sodium.over.median
+df_v2$Code <- NULL
+
+outcome <- c('Death.rate.high') # Smoking.kills.more, sodium.over.median
 pos <- TRUE # positive value 
 
-df <- df |>
+df_v2 <- df_v2 |>
   mutate(
-    #Smoking.kills.more = (Smoking > High.body.mass.index)
-    Unsafe.sex.kills.more = (Unsafe.sex > Alochol.use),
+    Death.rate.high = (Death.rate > median(Death.rate)),
     Unsafe.sex.over.median = (Unsafe.sex.rate > median(Unsafe.sex.rate)),
     Alochol.over.median = (Alochol.use.rate > median(Alochol.use.rate))
 )
 
-d <- df
+d <- df_v2
 
 set.seed(729375)
 d$rgroup <- runif(dim(d)[1])
@@ -296,12 +305,12 @@ dTest <- subset(d, rgroup>0.9)
 useForCal <- rbinom(n=dim(dTrainAll)[1], size=1, prob=0.1)>0
 dCal <- subset(dTrainAll, useForCal)
 dTrain <- subset(dTrainAll, !useForCal)
-
-print(dim(dTrain))
-
-print(dim(dCal))
-
-print(dim(dTest))
+# 
+# print(dim(dTrain))
+# 
+# print(dim(dCal))
+# 
+# print(dim(dTest))
 
 ```
 
@@ -311,7 +320,7 @@ The next step is to go through the categorical variables and see which one has t
 
 # names of columns that are categorical type and numerical type
 vars <- setdiff(colnames(dTrainAll), c(outcome, 'rgroup'))
-catVars <- vars[sapply(df[,vars], class) %in% c('character', 'logical',  'factor')]
+catVars <- vars[sapply(d[,vars], class) %in% c('character', 'logical',  'factor')]
 
 mkPredC <- function(outCol, varCol, appCol) {
   pPos <- sum(outCol==pos)/length(outCol)
@@ -387,7 +396,7 @@ plot_roc(dCal[[selCatVars[2]]], dCal[,outcome], colour_id=3, overlaid=T) # Secon
 Country seems to help more than Year since its AUC value is always higher than the null model. Now we are going to use all numerical variables for prediction and see which one performs the best to predict `r outcome`.
 
 ```{r selnumVar, echo=TRUE, warning=FALSE}
-numericVars <- vars[sapply(df[,vars], class) %in% c('numeric','integer')]
+numericVars <- vars[sapply(d[,vars], class) %in% c('numeric','integer')]
 
 # get all percentage / rate variables 
 rateVars <- grep("\\.rate$", numericVars, value = TRUE)
@@ -410,7 +419,7 @@ for (v in numericVars) {
 
 # selNumVars is a vector that keeps the names of the top performing numerical variables.
 selNumVars <- c()
-minDrop <- -3
+#minDrop <- -3
 
 for (v in numericVars) {
   pi <- paste('pred.', v, sep='')
@@ -434,6 +443,7 @@ calcAUC <- function(ypred, ytrue) {
   as.numeric(perf@y.values)
 }
 
+# selVars <- c(selCatVars, selNumVars)
 selVars <- c()
 
 ## Performance of the top performing single variables on the test set:
@@ -471,9 +481,9 @@ for (var in original_vars) {
     aucs[rep] <- calcAUC(predRep, dTrainAll[useForCalRep, outcome])
   }
   print(sprintf("In dTrainAll %s: mean AUC: %4.3f; sd: %4.3f", var, mean(aucs), sd(aucs)))
-  if(mean(aucs) <= 0.5){
-    original_vars <- setdiff(original_vars, var)
-  }
+  #if(mean(aucs) <= 0.5){
+  #  original_vars <- setdiff(original_vars, var)
+  #}
 }
 
 print(selVars)
@@ -481,6 +491,7 @@ print(original_vars)
 
 ```
 
+### To change
 After inspecting the best performing variables a bit more, *Country* still seems a good relevant feature variable. *Unsafe.water.source* and *Household.air.pollution.from.solid.fuels* barely predict better than 50% with a high standard deviation that makes its performance low. 
 
 Strange prediction for Country can be > 1.0??
@@ -490,9 +501,9 @@ Strange prediction for Country can be > 1.0??
 # outliers <- dCal[dCal$pred.Entity > 1.0, c('Entity', 'Year', 'pred.Entity', 'Smoking.kills.more', 'Smoking', 'High.body.mass.index', 'Smoking.rate', 'High.body.mass.index.rate')]
 # print(outliers)
 
-fig1 <- ggplot(dCal) + geom_density(aes(x=pred.No.access.to.handwashing.facility, color=as.factor(Unsafe.sex.kills.more)))
+fig1 <- ggplot(dCal) + geom_density(aes(x=pred.total.population, color=as.factor(Death.rate.high)))
 
-fig2 <- ggplot(dCal) + geom_density(aes(x=pred.Country, color=as.factor(Unsafe.sex.kills.more)))
+fig2 <- ggplot(dCal) + geom_density(aes(x=pred.Unsafe.sanitation, color=as.factor(Death.rate.high)))
 
 grid.arrange(fig1, fig2, ncol=1)
 
@@ -501,9 +512,12 @@ grid.arrange(fig1, fig2, ncol=1)
 Visualise the ROC curve for all 3 variables.
 
 ```{r}
-plot_roc(dCal$pred.No.access.to.handwashing.facility, dCal[,outcome], colour_id=7) #Water source is gold
-plot_roc(dCal$pred.Country, dCal[,outcome], colour_id=3, overlaid=T) # Country is green
-# plot_roc(dCal$pred.Household.air.pollution.from.solid.fuels, dCal[,outcome], colour_id=4, overlaid=T) # household air pollution is blue
+# colour_id 1-7 are: black,red,green,blue,cyan,purple,gold
+plot_roc(dCal$pred.Year, dCal[,outcome], colour_id=2) #W red
+plot_roc(dCal$pred.Country, dCal[,outcome], colour_id=7, overlaid = T) #W gold
+plot_roc(dCal$pred.total.population, dCal[,outcome], colour_id=3, overlaid=T) # green
+plot_roc(dCal$pred.Unsafe.sanitation, dCal[,outcome], colour_id=4, overlaid=T) #  blue
+
 ```
 *Country* still appears to be the best performer, with *Unsafe.water.source* being the second best and *Household.air.pollution.from.solid.fuels* being the last which predicts less than the null model around $FPR = 0.8$. This means whether or not smoking kills more people than obesity is a country specific issue. We will take these 3 feature variables into the multiple feature model to see if using more variables can do a better job. 
 
