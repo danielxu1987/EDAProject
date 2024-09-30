@@ -340,6 +340,14 @@ for (v in catVars) {
   dTrain[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dTrain[,v])
   dCal[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dCal[,v])
   dTest[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dTest[,v])
+  
+  # # it seems pred values can be greater than 1 sometimes, not sure why it happens but replacing them with median value looks better
+  # dTrain <- dTrain %>%
+  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
+  # dCal <- dCal %>%
+  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
+  # dTest <- dTest %>%
+  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
 }
 
 # Define a function to compute log likelihood so that we can reuse it.
@@ -417,6 +425,13 @@ for (v in numericVars) {
   dTrain[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
   dTest[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTest[,v])
   dCal[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dCal[,v])
+  # # it seems pred values can be greater than 1 sometimes, not sure why it happens but replacing them with median value looks better
+  # dTrain <- dTrain %>%
+  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
+  # dCal <- dCal %>%
+  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
+  # dTest <- dTest %>%
+  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
 }
 
 # selNumVars is a vector that keeps the names of the top performing numerical variables.
@@ -441,8 +456,8 @@ The `r selNumVars` seems to be useful in reducing deviance, especially `r selNum
 ```{r evaluate, echo=TRUE}
 library(ROCR)
 calcAUC <- function(ypred, ytrue) {
-  perf <- performance(prediction(ypred, ytrue), 'auc')
-  as.numeric(perf@y.values)
+    perf <- performance(prediction(ypred, ytrue), 'auc')
+    as.numeric(perf@y.values)
 }
 
 # selVars <- c(selCatVars, selNumVars)
@@ -493,10 +508,21 @@ print(original_vars)
 
 ```
 
-After inspecting the best performing variables a bit more, it seems `r original_vars[1]` works very well in training and calibration dataset, but not so well in the test data.
+After inspecting the best performing variables a bit more, it seems `r original_vars[1]` works very well in training and calibration dataset, but not so well in the test data. Now visualise the ROC curve for the 2 variables.
+
+```{r roc_selNumVars, echo=TRUE}
+# colour_id 1-7 are: black,red,green,blue,cyan,purple,gold
+# plot_roc(dCal$pred.Year, dCal[,outcome], colour_id=2) #W red
+# plot_roc(dCal$pred.Country, dCal[,outcome], colour_id=7, overlaid = T) #W gold
+plot_roc(dCal$pred.total.population, dCal[,outcome], colour_id=3) # population is green
+plot_roc(dCal$pred.Unsafe.sanitation, dCal[,outcome], colour_id=4, overlaid=T) #  sanitation is blue
+
+```
+
+It is clear that total population (green) covers a larger area. In this single variable selection part, total population seems to be the best sole variable to predict if the death rate will be higher than its worldwide median or not. Our interpretation is that the higher the population the higher death rate will be. This is probably due to the majority of the populated countries are developing countries where standard of living is less good than the developed countries, which tend to have lower population. We will take these feature variables into the multi-variate model to see if using more variables can do a better job. 
 
 
-```{r double_density_cat, include=FALSE}
+```{r double_density_cat, echo=TRUE}
 
 # outliers <- dCal[dCal$pred.Entity > 1.0, c('Entity', 'Year', 'pred.Entity', 'Smoking.kills.more', 'Smoking', 'High.body.mass.index', 'Smoking.rate', 'High.body.mass.index.rate')]
 # print(outliers)
@@ -509,53 +535,85 @@ grid.arrange(fig1, fig2, ncol=1)
 
 ```
 
-Visualise the ROC curve for all 3 variables.
-
-```{r}
-# colour_id 1-7 are: black,red,green,blue,cyan,purple,gold
-plot_roc(dCal$pred.Year, dCal[,outcome], colour_id=2) #W red
-plot_roc(dCal$pred.Country, dCal[,outcome], colour_id=7, overlaid = T) #W gold
-plot_roc(dCal$pred.total.population, dCal[,outcome], colour_id=3, overlaid=T) # green
-plot_roc(dCal$pred.Unsafe.sanitation, dCal[,outcome], colour_id=4, overlaid=T) #  blue
-
-```
-*Country* still appears to be the best performer, with *Unsafe.water.source* being the second best and *Household.air.pollution.from.solid.fuels* being the last which predicts less than the null model around $FPR = 0.8$. This means whether or not smoking kills more people than obesity is a country specific issue. We will take these 3 feature variables into the multiple feature model to see if using more variables can do a better job. 
-
-## Decision tree model
 
 ## Naive Bayers model
 
-```{r nbmodel, echo=TRUE}
+We will now put the `r selNumVars` in Naive Nayers model for multiple variables for prediction.
 
-# #include Year also in NB model
-# selVars <- c('pred.Year', selVars)
-# 
-# # proportion of positive instances (outcome == pos) in the training set.
-# pPos <- sum(dTrain[,outcome]==pos)/length(dTrain[,outcome])
-# 
-# nBayes <- function(pPos, pf) {
-#   # proportion of negative instances (outcome != pos)
-#   pNeg <- 1 - pPos
-#   smoothingEpsilon <- 1.0e-5
-#   scorePos <- log(pPos + smoothingEpsilon) +
-#     rowSums(log(pf/pPos + smoothingEpsilon))
-#   scoreNeg <- log(pNeg + smoothingEpsilon) +
-#     rowSums(log((1-pf)/(1-pPos) + smoothingEpsilon))
-#   m <- pmax(scorePos, scoreNeg)
-#   expScorePos <- exp(scorePos-m)
-#   expScoreNeg <- exp(scoreNeg-m)
-#   expScorePos/(expScorePos+expScoreNeg)
-# }
-# 
-# dTrain$nbpredl <- nBayes(pPos, dTrain[,selVars])
-# dCal$nbpredl <- nBayes(pPos, dCal[,selVars])
-# dTest$nbpredl <- nBayes(pPos, dTest[,selVars])
-# cat('The AUC value for the training set is:', calcAUC(dTrain$nbpredl, dTrain[,outcome]==pos))
-# ## The AUC value for the training set for uws and hapfsf is: 0.5575
-# 
-# cat('The AUC value for the calibration set is:', calcAUC(dCal$nbpredl, dCal[,outcome]==pos))
-# 
-# cat('The AUC value for the test set is:', calcAUC(dTest$nbpredl, dTest[,outcome]==pos))
+```{r run_nb_numvars, echo=TRUE, warning=FALSE}
+
+run_nbPred <- function(outcome, selVars){
+
+  pPos <- sum(dTrain[,outcome]==pos)/length(dTrain[,outcome])
+  
+  nBayes <- function(pPos, pf) {
+    pNeg <- 1 - pPos
+    smoothingEpsilon <- 1.0e-5
+    scorePos <- log(pPos + smoothingEpsilon) +
+      rowSums(log(pf/pPos + smoothingEpsilon))
+    scoreNeg <- log(pNeg + smoothingEpsilon) +
+      rowSums(log((1-pf)/(1-pPos) + smoothingEpsilon))
+    m <- pmax(scorePos, scoreNeg)
+    expScorePos <- exp(scorePos-m)
+    expScoreNeg <- exp(scoreNeg-m)
+    expScorePos/(expScorePos+expScoreNeg)
+  }
+  
+  dTrain$nbpredl <- nBayes(pPos, dTrain[,selVars])
+  dCal$nbpredl <- nBayes(pPos, dCal[,selVars])
+  dTest$nbpredl <- nBayes(pPos, dTest[,selVars])
+  
+  # it seems the nbpredl has still NaN values. We will impute them with the median
+  dTrain <- dTrain %>%
+    mutate(nbpredl = ifelse(is.na(nbpredl), median(nbpredl, na.rm = TRUE), nbpredl))
+  dCal <- dCal %>%
+    mutate(nbpredl = ifelse(is.na(nbpredl), median(nbpredl, na.rm = TRUE), nbpredl))
+  dTest <- dTest %>%
+    mutate(nbpredl = ifelse(is.na(nbpredl), median(nbpredl, na.rm = TRUE), nbpredl))
+  
+  cat('Input variables are:', selVars, '\n')
+  cat('The AUC value for the training set is:', calcAUC(dTrain$nbpredl, dTrain[,outcome]==pos), '\n')
+  #The AUC value for the training set for uws and hapfsf is: 0.5575
+  
+  cat('The AUC value for the calibration set is:', calcAUC(dCal$nbpredl, dCal[,outcome]==pos), '\n')
+  
+  cat('The AUC value for the test set is:', calcAUC(dTest$nbpredl, dTest[,outcome]==pos))
+}
+
+#include also in NB model
+selVars <- selNumVars #c(selCatVars, selNumVars[2])
+run_nbPred(outcome, selVars)
+
+```
+In the single variable `r selNumVars[1]` has AUC 0.533 for training, 0.571 for calibration and 0.529 for test. `r selNumVars[2]` has 0.558 for training, 0.545 for calibration and 0.493 for test. Naive Bayers does give a slightly better result than each numeric variables alone. Let's see if adding the categorical variables helps.
+
+```{r run_nb_catvars, echo=TRUE, warning=FALSE}
+selVars <- selCatVars
+run_nbPred(outcome, selVars)
+```
+
+Nive Bayers model is useful for predictions with many input variables and categorical variables with many levels. Since our categorical variables only contain 2 values true/false, they don't really improve the performance. Try it again with Country and Year as extra categorical variables.
+
+```{r run_nb_all_catvars, echo=TRUE, warning=FALSE}
+selVars <- c(selVars, 'pred.Country', 'pred.Year')
+run_nbPred(outcome, selVars)
+```
+
+Note the AUC score is getting better. Now run NB model with all selected variables so far.
+
+```{r run_nb_all_vars, echo=TRUE, warning=FALSE}
+selVars <- c(selVars, selNumVars)
+run_nbPred(outcome, selVars)
+```
+
+It has improved to become 0.6 which is better than the *total.population* alone, also better then the combination of numerical variables.
+
+## Decision tree model
+```{r decision_tree, echo=TRUE}
+library(rpart)
+dt <- rpart(formula = Year ~ ., data = df_merged)
+library(rpart.plot)
+rpart.plot(dt)
 
 ```
 
