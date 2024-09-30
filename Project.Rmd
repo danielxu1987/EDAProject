@@ -208,14 +208,14 @@ We feel that the mortality count alone may not tell us much. So we would like to
 ```{r merge_gdp, echo=TRUE}
 library(reshape2)
 
-# merge gdp per capita
-gdp <- read.table('./API_NY.GDP.PCAP.CD_DS2_en_csv_v2_31681/API_NY.GDP.PCAP.CD_DS2_en_csv_v2_31681.csv',header=T, sep=',')
-colnames(gdp) <- gsub("^X", "", colnames(gdp))
-
-gdp <- gdp[, c('Country.Code', years)]
-gdp_df <- melt(gdp, id.vars = "Country.Code", variable.name = "Year", value.name = "gdp.per.capita")
-gdp_df$Year <- as.numeric(as.character(gdp_df$Year))
-df_merged_gdp <- merge(df, gdp_df, by.x = c("Code", "Year"), by.y = c("Country.Code", "Year"), all.x = TRUE)
+# # merge gdp per capita
+# gdp <- read.table('./API_NY.GDP.PCAP.CD_DS2_en_csv_v2_31681/API_NY.GDP.PCAP.CD_DS2_en_csv_v2_31681.csv',header=T, sep=',')
+# colnames(gdp) <- gsub("^X", "", colnames(gdp))
+# 
+# gdp <- gdp[, c('Country.Code', years)]
+# gdp_df <- melt(gdp, id.vars = "Country.Code", variable.name = "Year", value.name = "gdp.per.capita")
+# gdp_df$Year <- as.numeric(as.character(gdp_df$Year))
+# df_merged_gdp <- merge(df, gdp_df, by.x = c("Code", "Year"), by.y = c("Country.Code", "Year"), all.x = TRUE)
 
 
 # merge total population 
@@ -225,25 +225,24 @@ colnames(popl) <- gsub("^X", "", colnames(popl))
 popl <- popl[, c('Country.Code', years)]
 popl_df <- melt(popl, id.vars = "Country.Code", variable.name = "Year", value.name = "total.population")
 popl_df$Year <- as.numeric(as.character(popl_df$Year))
-df_gdp_popl <- merge(df_merged_gdp, popl_df, by.x = c("Code", "Year"), by.y = c("Country.Code", "Year"), all.x = TRUE)
+df_merged <- merge(df, popl_df, by.x = c("Code", "Year"), by.y = c("Country.Code", "Year"), all.x = TRUE)
 
-df_gdp_popl <- df_gdp_popl[, c(1:3, ncol(df_gdp_popl)-1, ncol(df_gdp_popl), 4:(ncol(df_gdp_popl)-2))]
+df_merged <- df_merged[, c(1:3, ncol(df_merged)-1, ncol(df_merged), 4:(ncol(df_merged)-2))]
 
-print(count_nas(df_gdp_popl))
+nacount <- count_nas(df_merged)
+print(nacount)
 
-nas_df_gdp_popl <- df_gdp_popl[is.na(df_gdp_popl$gdp.per.capita) &
-  is.na(df_gdp_popl$total.population),]
-print(nrow(nas_df_gdp_popl))
-print(nas_df_gdp_popl[sample(nrow(nas_df_gdp_popl), 6), 1:7])
 ```
 
-It appears that some islands and the total value of the whole world from the original death causes are also included which results in 150 NAs in both gdp and total population. This is only 2.4% of all dataset. We think it is ok to drop them.
+It appears that some islands and the total value of the whole world from the original death causes are also included which results in `r nacount` NAs in both gdp and total population. This is only `r nacount/nrow(df_merged)*100`% of all dataset. Since we are only intereted in studying individual countries it ok to drop them.
 
 ```{r drop_nas, echo=TRUE}
-df_gdp_popl <- setdiff(df_gdp_popl, nas_df_gdp_popl)
+
+nas_df_merged <- df_merged[is.na(df_merged$total.population),]
+df_merged <- setdiff(df_merged, nas_df_merged)
 
 # Our new dataset looks like:
-df_gdp_popl[sample(nrow(df_gdp_popl), 6), 1:6]
+df_merged[sample(nrow(df_merged), 6), 1:6]
 
 ```
 
@@ -252,49 +251,49 @@ We would like to know more about the death cause that have large impact worldwid
 We will first create a rate to count the percentage of each specific casualty cause. Then visualise the stats with boxplot to see the major players worldwide. Also country and year will be converted to factor.
 
 ```{r addCat, echo=TRUE}
-df_v2 <- df_gdp_popl
 
-df_v2$Country <- as.factor(df_v2$Country)
-df_v2$Year <- as.factor(df_v2$Year)
+df_merged$Country <- as.factor(df_merged$Country)
+df_merged$Year <- as.factor(df_merged$Year)
 
-df_v2$total.mortality <- rowSums(df_v2[numericVars])
+df_merged$total.mortality <- rowSums(df_merged[numericVars])
 
 for (col in numericVars) {
-    df_v2[paste0(col, ".rate")] <- df_v2[col] / df_v2['total.mortality']
+    df_merged[paste0(col, ".rate")] <- df_merged[col] / df_merged['total.mortality']
 }
 
-rateVars <- grep("\\.rate$", names(df_v2), value = TRUE)
+rateVars <- grep("\\.rate$", names(df_merged), value = TRUE)
 
-figRateAll <- ggplot(stack(df_v2[rateVars])) + geom_boxplot(mapping = aes(x = ind, y = values)) + labs(x ='', y='Weight in total mortality') + coord_flip() 
+figRateAll <- ggplot(stack(df_merged[rateVars])) + geom_boxplot(mapping = aes(x = ind, y = values)) + labs(x ='', y='Weight in total mortality') + coord_flip() 
 
 print(figRateAll)
 
 # count the death rate of all causes with respect to the total population
-df_v2$Death.rate <- (df_v2$total.mortality / df_v2$total.population)
+df_merged$Death.rate <- (df_merged$total.mortality / df_merged$total.population)
 ```
 
 ### Single variable prediction
-It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see what makes the death rate of a country over the median of the whole world.  So we will first generate an outcome column which indicates if death rate is higher than the worldwide median. This variable holds the ground truth to check against the prediction later. 
+It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see what causes high death rate to a country. So we will first generate an outcome column which indicates if death rate is higher than the worldwide median. This variable holds the ground truth to check against the prediction later. 
 
-We are also interested in if the higher *Unsafe.sex* and *Alochol.use* have strong correlation with the death rate. So we will also derived binary variables to indicate if their percentage in total mortality is higher than median or not. Code is less self-explanatory than Country so we will remove it. The country and year will be the categorical variables to evaluate in the single variable selection process. 
+Our hypothesis is that the higher percentage of top death causes the more likely death rate will be high. So we will also derived binary values from *Unsafe.sex*, *High.blood.pressure* and *Smoking* to see if these death contribution is over their median values or not. Another reason to make extra binary is because so far there are only years and country which can be converted to factor. We would like to create a couple of extra categorical variables. Code is less self-explanatory than Country so we will remove it. 
 
 Now it is time to separate the data into training (81%), calibration(9%) and test (10%) data.
 
 ```{r get_train_cal_test, echo=TRUE}
 
-df_v2$Code <- NULL
+df_merged$Code <- NULL
 
 outcome <- c('Death.rate.high') # Smoking.kills.more, sodium.over.median
 pos <- TRUE # positive value 
 
-df_v2 <- df_v2 |>
+df_merged <- df_merged |>
   mutate(
     Death.rate.high = (Death.rate > median(Death.rate)),
     Unsafe.sex.over.median = (Unsafe.sex.rate > median(Unsafe.sex.rate)),
-    Alochol.over.median = (Alochol.use.rate > median(Alochol.use.rate))
+    Smoking.over.median = (Smoking.rate > median(Smoking.rate)),
+    Blood.pressure.over.median = (High.systolic.blood.pressure.rate < median(High.systolic.blood.pressure.rate))
 )
 
-d <- df_v2
+d <- df_merged
 
 set.seed(729375)
 d$rgroup <- runif(dim(d)[1])
@@ -374,7 +373,7 @@ cat(sprintf("To compare, deviance reduction of the truth for %6s is: %g\n", outc
 
 ```
 
-The log likelihood and deviance reduction do not look great in either country or year. Let is check how they perform in the ROC curve.
+The log likelihood and deviance reduction do not look great in any categorical/binary variables. Let is check how they perform in the ROC curve.
 
 ```{r roc_curve, echo=TRUE}
 library(ROCit)
@@ -391,9 +390,12 @@ print(selCatVars)
 
 plot_roc(dCal[[selCatVars[1]]], dCal[,outcome]) #First variable is red
 plot_roc(dCal[[selCatVars[2]]], dCal[,outcome], colour_id=3, overlaid=T) # Second variable is green
+plot_roc(dCal[[selCatVars[3]]], dCal[,outcome], colour_id=4, overlaid=T)
 ```
 
-Country seems to help more than Year since its AUC value is always higher than the null model. Now we are going to use all numerical variables for prediction and see which one performs the best to predict `r outcome`.
+Their AUC values are not higher than the null model. This was also confirmed in their loglikelihood and deviance reduction. 
+
+Now we are going to use all numerical variables for prediction and see which one performs the best to predict `r outcome`.
 
 ```{r selnumVar, echo=TRUE, warning=FALSE}
 numericVars <- vars[sapply(d[,vars], class) %in% c('numeric','integer')]
@@ -419,7 +421,7 @@ for (v in numericVars) {
 
 # selNumVars is a vector that keeps the names of the top performing numerical variables.
 selNumVars <- c()
-#minDrop <- -3
+minDrop <- 0
 
 for (v in numericVars) {
   pi <- paste('pred.', v, sep='')
@@ -434,7 +436,7 @@ for (v in numericVars) {
 
 ```
 
-Now that both types of variables are shortlisted, let us see how it performs using AUC in calibration and test dataset. Also check the result with 100 fold cross-validation.
+The `r selNumVars` seems to be useful in reducing deviance, especially `r selNumVars[2]`. Let us see how it performs using AUC in calibration and test dataset. Also check the result with 100 fold cross-validation.
 
 ```{r evaluate, echo=TRUE}
 library(ROCR)
@@ -450,7 +452,7 @@ selVars <- c()
 for(v in c(selCatVars, selNumVars)) {
   pi <- v
   aucTrain <- calcAUC(dTrain[,pi], dTrain[,outcome])
-  if (aucTrain > 0.53) {
+  if (aucTrain > 0.52) {
     selVars <- c(selVars, pi)
     aucCal <- calcAUC(dCal[,pi], dCal[,outcome])
     print(sprintf(
@@ -491,10 +493,8 @@ print(original_vars)
 
 ```
 
-### To change
-After inspecting the best performing variables a bit more, *Country* still seems a good relevant feature variable. *Unsafe.water.source* and *Household.air.pollution.from.solid.fuels* barely predict better than 50% with a high standard deviation that makes its performance low. 
+After inspecting the best performing variables a bit more, it seems `r original_vars[1]` works very well in training and calibration dataset, but not so well in the test data.
 
-Strange prediction for Country can be > 1.0??
 
 ```{r double_density_cat, include=FALSE}
 
