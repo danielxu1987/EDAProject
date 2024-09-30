@@ -21,10 +21,6 @@ df_original <- read.csv("./Countries and death causes.csv",header = T, sep=",")
 
 df <- df_original
 years <- 1990:2019
-dietVars <- c('Diet.low.in.whole.grains', 'Diet.low.in.fruits', 'Diet.low.in.Vegetables', 'Diet.low.in.nuts.and.seeds', 'Diet.high.in.sodium')
-
-dietTargetVar <- c('Diet.high.in.sodium')
-dietFeatureVars <- dietVars[dietVars != dietTargetVar]
 
 count_nas <- function(data){
   count_missing <- function(data){
@@ -610,12 +606,13 @@ It has become 0.6 which is better than the *total.population* alone, also better
 
 ## Decision tree model
 
+We will place the selected variables in the decision tree model.
 
 ```{r decision_tree, echo=TRUE}
 library(rpart)
 library(rpart.plot)
 
-fV <- paste(outcome, '>0 ~ ', paste(c(selCatVars, selNumVars), collapse=' + '), sep='')
+fV <- paste(outcome, '>0 ~ ', paste(selVars, collapse=' + '), sep='')
 print(fV)
 
 tmodel <- rpart(formula = fV, data=dTrain)
@@ -630,6 +627,7 @@ rpart.plot(tmodel)
 
 ```
 
+The AUC increases to over 0.81 across training, calibration and test data. This is the highest score so far, better than single variable and Naive Bayers.
 
 ## LIME evaluation 
 
