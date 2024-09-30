@@ -592,28 +592,41 @@ selVars <- selCatVars
 run_nbPred(outcome, selVars)
 ```
 
-Nive Bayers model is useful for predictions with many input variables and categorical variables with many levels. Since our categorical variables only contain 2 values true/false, they don't really improve the performance. Try it again with Country and Year as extra categorical variables.
+Naive Bayers model is useful for predictions with many input variables and categorical variables with many levels. Since our categorical variables only contain 2 values true/false, they don't really improve the performance. Try it again with Country and Year as extra categorical variables.
 
 ```{r run_nb_all_catvars, echo=TRUE, warning=FALSE}
 selVars <- c(selVars, 'pred.Country', 'pred.Year')
 run_nbPred(outcome, selVars)
 ```
 
-Note the AUC score is getting better. Now run NB model with all selected variables so far.
+Note the AUC score is getting better. Now run NB model with all selected categorical and top performing numerical variables.
 
 ```{r run_nb_all_vars, echo=TRUE, warning=FALSE}
 selVars <- c(selVars, selNumVars)
 run_nbPred(outcome, selVars)
 ```
 
-It has improved to become 0.6 which is better than the *total.population* alone, also better then the combination of numerical variables.
+It has become 0.6 which is better than the *total.population* alone, also better than the combination of numerical variables.
 
 ## Decision tree model
+
+
 ```{r decision_tree, echo=TRUE}
 library(rpart)
-dt <- rpart(formula = Year ~ ., data = df_merged)
 library(rpart.plot)
-rpart.plot(dt)
+
+fV <- paste(outcome, '>0 ~ ', paste(c(selCatVars, selNumVars), collapse=' + '), sep='')
+print(fV)
+
+tmodel <- rpart(formula = fV, data=dTrain)
+print(calcAUC(predict(tmodel, newdata=dTrain), dTrain[,outcome]))
+## [1] 0.705922
+print(calcAUC(predict(tmodel, newdata=dTest), dTest[,outcome]))
+## [1] 0.6825181
+print(calcAUC(predict(tmodel, newdata=dCal), dCal[,outcome]))
+## [1] 0.6935539
+
+rpart.plot(tmodel)
 
 ```
 
