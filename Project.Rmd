@@ -270,7 +270,9 @@ df_merged$Death.rate <- (df_merged$total.mortality / df_merged$total.population)
 ### Single variable prediction
 It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see what causes high death rate to a country. So we will first generate an outcome column which indicates if death rate is higher than the worldwide median. This variable holds the ground truth to check against the prediction later. 
 
-Our hypothesis is that the higher percentage of top death causes the more likely death rate will be high. So we will also derived binary values from *Unsafe.sex*, *High.blood.pressure* and *Smoking* to see if these death contribution is over their median values or not. Another reason to make extra binary is because so far there are only years and country which can be converted to factor. We would like to create a couple of extra categorical variables. Code is less self-explanatory than Country so we will remove it. 
+Our hypothesis is that the higher percentage of most influential death causes the more likely death rate will be high. So we will also derived binary values from *Unsafe.sex*, *High.blood.pressure* and *Smoking* to see if these death contribution is over their median values or not. 
+
+Another reason to make extra binary is because so far there are only years and country which can be converted to factors. We would like to combine a couple of extra categorical variables in our prediction. Variable *Code* is less self-explanatory than Country and therefore we will remove it. 
 
 Now it is time to separate the data into training (81%), calibration(9%) and test (10%) data.
 
@@ -300,16 +302,10 @@ dTest <- subset(d, rgroup>0.9)
 useForCal <- rbinom(n=dim(dTrainAll)[1], size=1, prob=0.1)>0
 dCal <- subset(dTrainAll, useForCal)
 dTrain <- subset(dTrainAll, !useForCal)
-# 
-# print(dim(dTrain))
-# 
-# print(dim(dCal))
-# 
-# print(dim(dTest))
 
 ```
 
-The next step is to go through the categorical variables and see which one has the best prediction chance. Here the null model is saying the prediction will be the overall proportion of True values, regardless what input it receives. Therefore, anything that is selected should help predict the result better than this model does. 
+The next step is to go through the categorical variables and see which one has the best prediction chance. Here the null model is saying the chance of our outcome variable being True will be the overall proportion of True values in the whole dataset, regardless what input it receives. Our goal is to find the single variable(s) that can help predict the result better than the null model does. 
 
 ```{r catVars_compare, echo=TRUE, warning=FALSE}
 
@@ -336,14 +332,6 @@ for (v in catVars) {
   dTrain[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dTrain[,v])
   dCal[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dCal[,v])
   dTest[,pi] <- mkPredC(dTrain[,outcome], dTrain[,v], dTest[,v])
-  
-  # # it seems pred values can be greater than 1 sometimes, not sure why it happens but replacing them with median value looks better
-  # dTrain <- dTrain %>%
-  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
-  # dCal <- dCal %>%
-  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
-  # dTest <- dTest %>%
-  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
 }
 
 # Define a function to compute log likelihood so that we can reuse it.
@@ -353,8 +341,6 @@ logLikelihood <- function(ypred, ytrue) {
 
 # Compute the likelihood of the Null model on the calibration
 pred.Null <- sum(dTrain[,outcome]==pos)/nrow(dTrain)
-cat("Proportion of outcome == True in dTrain:", pred.Null)
-
 logNull <- logLikelihood(sum(dCal[,outcome]==pos)/nrow(dCal), dCal[,outcome]==pos)
 cat("The log likelihood of the Null model is:", logNull)
 
@@ -373,11 +359,11 @@ for (v in catVars) {
 }
 
 devDrop <- 2*(logLikelihood(dCal[,outcome], dCal[,outcome]==pos) - logNull)
-cat(sprintf("To compare, deviance reduction of the truth for %6s is: %g\n", outcome, devDrop))
+cat(sprintf("To compare, deviance reduction of the variable that we want to predict %6s is: %g\n", outcome, devDrop))
 
 ```
 
-The log likelihood and deviance reduction do not look great in any categorical/binary variables. Let is check how they perform in the ROC curve.
+After check the log likelihood and deviance reduction, no categorical or binary variables are doing a great job. Let is check how they perform in the ROC curve.
 
 ```{r roc_curve, echo=TRUE}
 library(ROCit)
@@ -397,9 +383,9 @@ plot_roc(dCal[[selCatVars[2]]], dCal[,outcome], colour_id=3, overlaid=T) # Secon
 plot_roc(dCal[[selCatVars[3]]], dCal[,outcome], colour_id=4, overlaid=T)
 ```
 
-Their AUC values are not higher than the null model. This was also confirmed in their loglikelihood and deviance reduction. 
+Their AUC values are not higher than the null model. This is the confirmation to their performance in log likelihood and deviance reduction.
 
-Now we are going to use all numerical variables for prediction and see which one performs the best to predict `r outcome`.
+Now we are going to see if numerical variables can do better. We will use all num vars for prediction of `r outcome`.
 
 ```{r selnumVar, echo=TRUE, warning=FALSE}
 numericVars <- vars[sapply(d[,vars], class) %in% c('numeric','integer')]
@@ -421,13 +407,6 @@ for (v in numericVars) {
   dTrain[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTrain[,v])
   dTest[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dTest[,v])
   dCal[,pi] <- mkPredN(dTrain[,outcome], dTrain[,v], dCal[,v])
-  # # it seems pred values can be greater than 1 sometimes, not sure why it happens but replacing them with median value looks better
-  # dTrain <- dTrain %>%
-  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
-  # dCal <- dCal %>%
-  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
-  # dTest <- dTest %>%
-  #   mutate(pi = ifelse(pi > 1, median(pi[pi <= 1]), pi))
 }
 
 # selNumVars is a vector that keeps the names of the top performing numerical variables.
@@ -447,7 +426,7 @@ for (v in numericVars) {
 
 ```
 
-The `r selNumVars` seems to be useful in reducing deviance, especially `r selNumVars[2]`. Let us see how it performs using AUC in calibration and test dataset. Also check the result with 100 fold cross-validation.
+The `r selNumVars` seems to be useful in reducing deviance, especially `r selNumVars[2]` which is doing extremely well. Let us see how it performs using AUC in calibration and test data set. We will also check the result with 100 fold cross-validation.
 
 ```{r evaluate, echo=TRUE}
 library(ROCR)
@@ -474,8 +453,7 @@ for(v in c(selCatVars, selNumVars)) {
 
 # Run 100-fold cross validation
 original_vars <- character() #sub("^pred\\.", "", selVars)
-
-cat("Performance of the top performing single variables on the test set:")
+# cat("Performance of the top performing single variables on the test set:")
 
 for (v in selVars) {
   # retrieve the original variable name (character location 6 onward)
@@ -494,22 +472,17 @@ for (var in original_vars) {
     aucs[rep] <- calcAUC(predRep, dTrainAll[useForCalRep, outcome])
   }
   print(sprintf("In dTrainAll %s: mean AUC: %4.3f; sd: %4.3f", var, mean(aucs), sd(aucs)))
-  #if(mean(aucs) <= 0.5){
-  #  original_vars <- setdiff(original_vars, var)
-  #}
 }
-
-print(selVars)
-print(original_vars)
+# 
+# print(selVars)
+# print(original_vars)
 
 ```
 
-After inspecting the best performing variables a bit more, it seems `r original_vars[1]` works very well in training and calibration dataset, but not so well in the test data. Now visualise the ROC curve for the 2 variables.
+After inspecting the selected variables a bit more, it seems `r original_vars[1]` works very well in training and calibration dataset, but not so well in the test data. Now visualise the ROC curve for the 2 variables.
 
 ```{r roc_selNumVars, echo=TRUE}
 # colour_id 1-7 are: black,red,green,blue,cyan,purple,gold
-# plot_roc(dCal$pred.Year, dCal[,outcome], colour_id=2) #W red
-# plot_roc(dCal$pred.Country, dCal[,outcome], colour_id=7, overlaid = T) #W gold
 plot_roc(dCal$pred.total.population, dCal[,outcome], colour_id=3) # population is green
 plot_roc(dCal$pred.Unsafe.sanitation, dCal[,outcome], colour_id=4, overlaid=T) #  sanitation is blue
 
@@ -519,9 +492,6 @@ It is clear that total population (green) covers a larger area. In this single v
 
 
 ```{r double_density_cat, echo=TRUE}
-
-# outliers <- dCal[dCal$pred.Entity > 1.0, c('Entity', 'Year', 'pred.Entity', 'Smoking.kills.more', 'Smoking', 'High.body.mass.index', 'Smoking.rate', 'High.body.mass.index.rate')]
-# print(outliers)
 
 fig1 <- ggplot(dCal) + geom_density(aes(x=pred.total.population, color=as.factor(Death.rate.high)))
 
@@ -611,6 +581,8 @@ We will place the selected variables in the decision tree model.
 ```{r decision_tree, echo=TRUE}
 library(rpart)
 library(rpart.plot)
+
+selVars <- c(selCatVars, selNumVars)
 
 fV <- paste(outcome, '>0 ~ ', paste(selVars, collapse=' + '), sep='')
 print(fV)
