@@ -16,7 +16,7 @@ dataTAN <- df[df['Entity']=='Tanzania',]
 dataNLD <- df[df['Entity']=='Netherlands',]
 dataCAM <- df[df['Entity']=='Cambodia',]
 
-numericVars <- sort(names(df[, -c(1:3)]))
+num_vars <- sort(names(df[, -c(1:3)]))
 countries <- unique(df$Entity)
 years <- 1990:2019
 

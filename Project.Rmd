@@ -115,13 +115,16 @@ Across all variables, a fact is that high value of mortality does not appear oft
 
 After comparing different countries with boxplot, it is noticeable that developed countries usually have less mortalities than developing countries in causes related to poor hygiene (e.g. water quality, unsafe sanitation and no access to hand washing facility). 
 
-![Compare countries - unsafe water source](./images/box_water.JPG)
+![Unsafe water source](./images/box_water.JPG)
 
-![Compare countries - unsafe sanitation](./images/box_sani.JPG)
 
-![Compare countries - no access to handwashing facility](./images/box_handw.JPG)
+![Unsafe sanitation](./images/box_sani.JPG)
 
-Two pairs of countries are selected here as examples between the *Uk* and *Tanzania*, as well as the *Netherlands* and *Cambodia*. The reason why they are compared to each other is because counties in each pair shares similar population according to [Worldometers](https://www.worldometers.info/world-population/population-by-country/).
+
+![No access to handwashing facility](./images/box_handw.JPG)
+
+
+Two pairs of countries are selected here as examples between *UK* and *Tanzania*, as well as *Netherlands* and *Cambodia*. The reason why they are compared to each other is because they share similar population according to [Worldometers](https://www.worldometers.info/world-population/population-by-country/).
 
 ### Trend comparison
 
@@ -129,13 +132,13 @@ Line graph shows the trend of certain causes from 1990 to 2019. Comparison betwe
 
 ![](./images/trend_alco.JPG)
 
-On the other hand, outdoor air pollution appears to become less harmful in western Europe than in Africa or Asia. This may have to do with the progress of industrialisation which leads to air pollution. In other words, Europe was almost at the end of it around the turn of the century, and they paid more attention to the environmental impact. While certain areas in Africa and Asia just started to industrialize themselves. That is why the air quality got worse and worse in this period there.
+On the other hand, outdoor air pollution appears to become less harmful in western Europe than in Africa or Asia. This may have to do with the progress of industrialisation which leads to air pollution. In other words, Europe was almost at the end of it around the turn of the century. That is when they paid more attention to the environmental impacts. While certain areas in Africa and Asia just started to industrialise themselves. That is why the air quality got worse and worse in this period there.
 
 ![](./images/trend_oap.JPG)
 
 ### Bar chart
 
-Drug use seems to have serious impact in both rich and poor areas. In the figure below, far more people ended their life in India and the USA due to drug use than the whole African Region in 2010. European region is not much better as they ranked the third in this set of comparison worldwide.
+Drug use seems to have serious impact in both rich and poor areas. In the figure below, far more people ended their life in India and the USA due to drug use than the whole African Region in 2010. European region is not much better as they ranked the third in this set of comparison worldwide. And the population of the whole EU was smaller than South-East Asia (top 1).
 
 ![](./images/Bar_compare_us.JPG)
 
@@ -147,13 +150,13 @@ When comparing multiple variables, it is clear that diet related death causes ar
 
 ![](./images/pair_diet_northa.JPG)
 
-Smooth curve and jittering points shows drug use and unsafe sex clustering when sex fatality value is low.  Once the value grows further they seemed less correlated.
+Smooth curve and jittering points shows drug use and unsafe sex clustering when sex fatality value is low. Once the value grows further they seem less correlated.
 
 ![](./images/smooth_sexdrug_lim.JPG)
 
 ### Missing values and anomolies
 
-These values are checked in all numerical variables: *NA, null, zeros* and *negative numbers*. 
+All numerical variables are checked against: *NA, null, zeros* and *negative values*. 
 
 ```{r nas, echo=TRUE} 
 
@@ -169,9 +172,9 @@ print(sum(df_num < 0))
 print(sum(df_num == 0))
 ```
 
-Currently there is no NA's in the dataset, neither are there any negative values. There are zero values, which may indicate that either no one died of that specific cause in a country in a specific year, or they were missing values. Although it is possible to treat zero's as missing values and replace them with e.g. median or mean, doing this will overwrite all the zero's which are truly reflecting zero mortality.  Therefore, in this exploration attempt we will keep zero's as-is.
+Currently there is no NA's in the dataset, neither are there any negative values. So this dataset looks quite clearn. In addition, there are zero values, which may indicate that either no one died of that specific cause in a country in a specific year, or they are missing values. Although it is possible to treat zero's as NA's and replace them with e.g. median or mean, doing this will overwrite all the zero's which are truly reflecting zero mortality. Therefore, in this project we will keep zero's as-is.
 
-When checking the first three columns it shows that *Code* are empty in 690 rows. These appear to be specific to aggregated regions e.g. OECD Countries, or regions within a country without a valid country code e.g. Scotland.
+When checking the first three columns it shows that *Code* are empty in 690 rows. These appear to be specific to aggregated regions e.g. *OECD Countries* or regions within a country without a valid country code e.g. *Scotland*.
 
 ```{r rm_code, echo=TRUE}
 
@@ -189,7 +192,7 @@ empty_rows <- df[df$Code == '', ]
 print(empty_rows[sample(nrow(empty_rows), size = 6, replace = F), c(1:6)])
 ```
 
-Make it easier to understand the sections below we rename Entity to Country. Also, since we will merge external data into this dataset based on country code, those aggregated entities will not be receiving any data. Therefore we would like to drop them now and keep only data per country, not per group, for further study.
+To make it easier to understand the sections below we rename *Entity* to *Country*. Also, because we will merge external data into this dataset based on country code, the aggregated regions will not be receiving any match. Therefore we would like to drop them now and keep only data per country for further study.
 
 ```{r rmcode}
 colnames(df)[1] <- "Country"
@@ -199,20 +202,10 @@ df <- df[df$Code != '', ]
 
 ### Classfication 
 
-We feel that the mortality count alone may not tell us much. So we would like to include GDP per capita and country's population. Now we are going to merge the dataset as provided from [World Bank](https://data.worldbank.org/indicator/NY.GDP.PCAP.CD), and check missing values immediately.
+We feel that the mortality count alone may not tell us much. So we would like to include country's total population to study death rates. Now we are going to merge the dataset as provided from [World Bank](https://data.worldbank.org/indicator/NY.GDP.PCAP.CD), and check missing values immediately.
 
 ```{r merge_gdp, echo=TRUE}
 library(reshape2)
-
-# # merge gdp per capita
-# gdp <- read.table('./API_NY.GDP.PCAP.CD_DS2_en_csv_v2_31681/API_NY.GDP.PCAP.CD_DS2_en_csv_v2_31681.csv',header=T, sep=',')
-# colnames(gdp) <- gsub("^X", "", colnames(gdp))
-# 
-# gdp <- gdp[, c('Country.Code', years)]
-# gdp_df <- melt(gdp, id.vars = "Country.Code", variable.name = "Year", value.name = "gdp.per.capita")
-# gdp_df$Year <- as.numeric(as.character(gdp_df$Year))
-# df_merged_gdp <- merge(df, gdp_df, by.x = c("Code", "Year"), by.y = c("Country.Code", "Year"), all.x = TRUE)
-
 
 # merge total population 
 popl <- read.table('./API_SP.POP.TOTL_DS2_en_csv_v2_31753/API_SP.POP.TOTL_DS2_en_csv_v2_31753.csv',header=T, sep=',')
@@ -228,23 +221,25 @@ df_merged <- df_merged[, c(1:3, ncol(df_merged)-1, ncol(df_merged), 4:(ncol(df_m
 nacount <- count_nas(df_merged)
 print(nacount)
 
+nas_df_merged <- df_merged[is.na(df_merged$total.population),]
+nas_df_merged[sample(nrow(nas_df_merged), 6), 1:5]
+
 ```
 
-It appears that some islands and the total value of the whole world from the original death causes are also included which results in `r nacount` NAs in both gdp and total population. This is only `r nacount/nrow(df_merged)*100`% of all dataset. Since we are only intereted in studying individual countries it ok to drop them.
+It appears that some islands and the total value of the whole world from the original death causes are also included which results in `r nacount` NA's in total population. This is only `r nacount/nrow(df_merged)*100`% of all dataset. Since we are only interested in studying individual countries it alright to drop them.
 
 ```{r drop_nas, echo=TRUE}
 
-nas_df_merged <- df_merged[is.na(df_merged$total.population),]
 df_merged <- setdiff(df_merged, nas_df_merged)
 
 # Our new dataset looks like:
-df_merged[sample(nrow(df_merged), 6), 1:6]
+df_merged[sample(nrow(df_merged), 6), 1:5]
 
 ```
 
-We would like to know more about the death cause that have large impact worldwide. Since the absolute number of mortality can vary largely depending on the population of a country, a better measurement is the percentage of each death cause, with respect to the total casualties in that row. 
+Now that total population is merged and tidied up, we would like to know which death causes have large impact worldwide. Since the absolute number of mortality can vary largely depending on the population of a country, a better measurement is the percentage of each death cause, with respect to the total casualties in that row. 
 
-We will first create a rate to count the percentage of each specific casualty cause. Then visualise the stats with boxplot to see the major players worldwide. Also country and year will be converted to factor.
+We will first create a rate to count the percentage of each specific casualty cause. Then visualise the stats with boxplot to see the major players worldwide. Also *Country* and *Year* will be converted to factor.
 
 ```{r addCat, echo=TRUE}
 
@@ -259,20 +254,20 @@ for (col in numericVars) {
 
 rateVars <- grep("\\.rate$", names(df_merged), value = TRUE)
 
-figRateAll <- ggplot(stack(df_merged[rateVars])) + geom_boxplot(mapping = aes(x = ind, y = values)) + labs(x ='', y='Weight in total mortality') + coord_flip() 
+figRateAll <- ggplot(stack(df_merged[rateVars])) + geom_boxplot(mapping = aes(x = ind, y = values)) + labs(x ='', y='Contribution of causes to total mortality') + coord_flip() 
+# count the death rate of all causes with respect to the total population
+df_merged$Death.rate <- (df_merged$total.mortality / df_merged$total.population)
 
 print(figRateAll)
 
-# count the death rate of all causes with respect to the total population
-df_merged$Death.rate <- (df_merged$total.mortality / df_merged$total.population)
 ```
 
 ### Single variable prediction
-It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see what causes high death rate to a country. So we will first generate an outcome column which indicates if death rate is higher than the worldwide median. This variable holds the ground truth to check against the prediction later. 
+It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see what causes high death rate to a country. The rate is high (True) is if it is over the median rate worldwide. This binary variable holds the ground truth to check against the prediction later. 
 
-Our hypothesis is that the higher percentage of most influential death causes the more likely death rate will be high. So we will also derived binary values from *Unsafe.sex*, *High.blood.pressure* and *Smoking* to see if these death contribution is over their median values or not. 
+Our hypothesis is that the higher percentage of the top death causes the more likely death rate will be high. So we will also derived binary values from *Unsafe.sex*, *High.blood.pressure* and *Smoking* to see if these death contribution is over their median values or not. 
 
-Another reason to make extra binary is because so far there are only years and country which can be converted to factors. We would like to combine a couple of extra categorical variables in our prediction. Variable *Code* is less self-explanatory than Country and therefore we will remove it. 
+Another reason to make extra binary variables is because so far there are only years and countries which can be converted to factors. We would like to combine a couple of extra categorical variables in our prediction. Variable *Code* is less self-explanatory than Country and therefore we will remove it. 
 
 Now it is time to separate the data into training (81%), calibration(9%) and test (10%) data.
 
@@ -363,7 +358,7 @@ cat(sprintf("To compare, deviance reduction of the variable that we want to pred
 
 ```
 
-After check the log likelihood and deviance reduction, no categorical or binary variables are doing a great job. Let is check how they perform in the ROC curve.
+After checking the log likelihood and deviance reduction, no categorical or binary variables are doing a great job. Let is check how they perform in the ROC curve.
 
 ```{r roc_curve, echo=TRUE}
 library(ROCit)
@@ -488,8 +483,7 @@ plot_roc(dCal$pred.Unsafe.sanitation, dCal[,outcome], colour_id=4, overlaid=T) #
 
 ```
 
-It is clear that total population (green) covers a larger area. In this single variable selection part, total population seems to be the best sole variable to predict if the death rate will be higher than its worldwide median or not. Our interpretation is that the higher the population the higher death rate will be. This is probably due to the majority of the populated countries are developing countries where standard of living is less good than the developed countries, which tend to have lower population. We will take these feature variables into the multi-variate model to see if using more variables can do a better job. 
-
+It is clear that total population (green) covers a larger area. Let us check the double density plot before drawing conclusion on which numerical variable is the best.
 
 ```{r double_density_cat, echo=TRUE}
 
@@ -501,10 +495,25 @@ grid.arrange(fig1, fig2, ncol=1)
 
 ```
 
+The peaks for `r selNumVars[1]` are a bit further away between TRUE and FALSE. When `r selNumVars[1]` is 0.5 the outcome will likely be False. When it becomes larger than 0.6 more `r outcome` will be True. This separation helps more in prediction. 
+
+In contrast, the peaks of `r selNumVars[2]` for True/False are only marginally separated. It gets harder to see when either binary value will more likely to appear. Therefore in this round of comparison `r selNumVars[1]` seems a better choice.
+
+In conclusion, both numerical variables selected seems to give reasonable predictions, only that one would perform better than the other depending on the measurement. To be honest, the `r selNumVars[2]` was not expected to be helpful in our prediction in the beginning. Also, three binary variables derived from the big contributors of death cause, which we expected to be strongly correlated with our outcome variable do not help much. 
+
+Our interpretation is that the higher the population the higher death rate will likely be. This may reflect the fact that developing countries have more population than highly developed countries, which have better livability and people there tend to live longer. 
+
+Next to that, safe sanitation seems to be crucial. This is more about washing hands, clean environment and hygiene, which are among the very basic standards of living. If these basic needs are not met, then many other things can go wrong which can put people's health and life at risk. 
+
+According to [WHO stats on 2019](https://ourworldindata.org/grapher/mortality-rate-attributable-to-wash#:~:text=Death%20rate%20attributed%20to%20unsafe,people%20of%20a%20given%20population), the higher death rate by unsafe water, sanitation and lack of hygiene comes mostly from developing countries in Africa, Asia and South America. 
+
+![](./images/WHO_WASH_2019.JPG)
+
+We will take these selected feature variables into the next round, feed them to multi-variate models to see if using multiple rather than single can do a better job. 
 
 ## Naive Bayers model
 
-We will now put the `r selNumVars` in Naive Nayers model for multiple variables for prediction.
+We will now put the `r selNumVars` in Naive Nayers model for prediction.
 
 ```{r run_nb_numvars, echo=TRUE, warning=FALSE}
 
@@ -551,14 +560,26 @@ selVars <- selNumVars #c(selCatVars, selNumVars[2])
 run_nbPred(outcome, selVars)
 
 ```
-In the single variable `r selNumVars[1]` has AUC 0.533 for training, 0.571 for calibration and 0.529 for test. `r selNumVars[2]` has 0.558 for training, 0.545 for calibration and 0.493 for test. Naive Bayers does give a slightly better result than each numeric variables alone. Let's see if adding the categorical variables helps.
+In the single variable prediction `r selNumVars[1]` has AUC:
+
++ 0.533 for training
++ 0.571 for calibration 
++ 0.529 for test. 
+
+`r selNumVars[2]` has AUC
+
++ 0.558 for training, 
++ 0.545 for calibration 
++ 0.493 for test. 
+
+Naive Bayers does give a slightly better result than each numeric variables alone. Let's see if the categorical variables can predict more accurately.
 
 ```{r run_nb_catvars, echo=TRUE, warning=FALSE}
 selVars <- selCatVars
 run_nbPred(outcome, selVars)
 ```
 
-Naive Bayers model is useful for predictions with many input variables and categorical variables with many levels. Since our categorical variables only contain 2 values true/false, they don't really improve the performance. Try it again with Country and Year as extra categorical variables.
+Similar to what we noticed earlier, these variables do not really contribute to better prediction. Naive Bayers model is useful for predictions with many input variables and categorical variables with many levels. Since our categorical variables only contain 2 values true/false, they don't really improve the performance. We going to try again with *Country* and *Year* as extra categorical variables.
 
 ```{r run_nb_all_catvars, echo=TRUE, warning=FALSE}
 selVars <- c(selVars, 'pred.Country', 'pred.Year')
@@ -572,13 +593,13 @@ selVars <- c(selVars, selNumVars)
 run_nbPred(outcome, selVars)
 ```
 
-It has become 0.6 which is better than the *total.population* alone, also better than the combination of numerical variables.
+It has become 0.6 which is better than the combination of all categorical variables. It is also better than each top performing numerical variables `r selNumVars` alone.
 
 ## Decision tree model
 
-We will place the selected variables in the decision tree model.
+We will place the same set of variables from Naive Bayers in the decision tree model using *rpart*, excluding *Country* and *Year* which do not seem to be helpful.
 
-```{r decision_tree, echo=TRUE}
+```{r decision_tree_cat_num, echo=TRUE}
 library(rpart)
 library(rpart.plot)
 
@@ -589,7 +610,7 @@ print(fV)
 
 tmodel <- rpart(formula = fV, data=dTrain)
 print(calcAUC(predict(tmodel, newdata=dTrain), dTrain[,outcome]))
-## [1] 0.705922
+## [1] 0.705922 all vars, excluding Year and Country
 print(calcAUC(predict(tmodel, newdata=dTest), dTest[,outcome]))
 ## [1] 0.6825181
 print(calcAUC(predict(tmodel, newdata=dCal), dCal[,outcome]))
@@ -599,8 +620,33 @@ rpart.plot(tmodel)
 
 ```
 
-The AUC increases to over 0.81 across training, calibration and test data. This is the highest score so far, better than single variable and Naive Bayers.
+This is a much better outcome than the Naive Bayers, reaching 0.70 for training dataset with nearly consistent performance for calibration and test sets.
 
-## LIME evaluation 
+Now include the *Country* and *Year* to see if there are any improvements.
+
+```{r decision_tree_all, echo=TRUE}
+selVars <- c(selCatVars, 'pred.Country', 'pred.Year', selNumVars)
+
+fV <- paste(outcome, '>0 ~ ', paste(selVars, collapse=' + '), sep='')
+print(fV)
+
+tmodel <- rpart(formula = fV, data=dTrain)
+print(calcAUC(predict(tmodel, newdata=dTrain), dTrain[,outcome]))
+## [1] 0.8154 all vars including Year and Country
+print(calcAUC(predict(tmodel, newdata=dTest), dTest[,outcome]))
+## [1] 0.8118
+print(calcAUC(predict(tmodel, newdata=dCal), dCal[,outcome]))
+## [1] 0.8125
+
+rpart.plot(tmodel)
+
+```
+
+The AUC increases to over 0.81 across training, calibration and test data. This is the highest score so far which is way better than single variable and Naive Bayers. 
+
+Our interpretation is that the 
 
 ## Clustering
+
+
+## LIME evaluation 
