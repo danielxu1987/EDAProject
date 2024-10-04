@@ -6,7 +6,7 @@ output:
 
 This is the R Notebook for the project from Sifeng Xu, 24525844 for unit *CITS4009 Computation Data Analysis*. It demonstrates the process and findings of EDA based on the **Countries and Death Causes** dataset. 
 
-```{r setup, echo=FALSE}
+```{r setup, include=FALSE}
 # Load  libraries
 # library(shiny)
 # library(shinyWidgets)
@@ -14,6 +14,8 @@ library(ggplot2)
 library(gridExtra)
 library(knitr)
 library(dplyr)
+library(fpc)
+library('grDevices')
 
 
 # load dataset
@@ -121,7 +123,7 @@ After comparing different countries with boxplot, it is noticeable that develope
 ![Unsafe sanitation](./images/box_sani.JPG)
 
 
-![No access to handwashing facility](./images/box_handw.JPG)
+![No access to handwashing facility](./images/box_handw.JPG)  
 
 
 Two pairs of countries are selected here as examples between *UK* and *Tanzania*, as well as *Netherlands* and *Cambodia*. The reason why they are compared to each other is because they share similar population according to [Worldometers](https://www.worldometers.info/world-population/population-by-country/).
@@ -647,6 +649,199 @@ The AUC increases to over 0.81 across training, calibration and test data. This 
 Our interpretation is that the 
 
 ## Clustering
+
+We would like to pick 8 major contributors to people's death, as shown in the figure of Contribution of causes to total mortality, as input variables to our clustering. As the total number of countries (>200) is too large for visualising hierarchical structure, we will only use 30 of them. Moreover, we would like to focus on year 2000 where the turning of century takes place.
+
+```{r hier_cluster, echo=TRUE}
+# cols_to_remove <- grep("rate", names(df_merged), value = TRUE)
+# # Identify logical columns
+# logical_cols <- sapply(df_merged, is.logical)
+# # Remove 'rate' columns, ignoring logical columns
+# df_cleaned <- df_merged[, !(names(df_merged) %in% cols_to_remove | logical_cols)]
+# df_cleaned <- df_cleaned[-c(1,2)]
+set.seed(123)
+uCons <- unique(df_merged$Country)
+
+clusterSet <- df_merged[df_merged$Year == 2000, ] # as.numeric(as.character(
+
+clusterSet <- clusterSet[sample(length(uCons), size = 25, replace = F), ]
+
+vars.to.use <- c('Diet.low.in.whole.grains.rate', 'Diet.low.in.fruits.rate', 'Diet.low.in.Vegetables.rate', 'Diet.low.in.nuts.and.seeds.rate', 'Diet.high.in.sodium.rate')
+
+# vars.to.use <- c('High.systolic.blood.pressure', 'Smoking', 'High.fasting.plasma.glucose', 'High.body.mass.index', 'Air.pollution', 'Alochol.use', 'Unsafe.sex', 'Low.birth.weight', 'total.population')
+
+scaled_df <- scale(clusterSet[, vars.to.use]) # this is a matrix 
+
+# The scaled:center attribute contains the mean values of all the columns.
+print(attr(scaled_df, "scaled:center"))
+# The scaled:scale attribute contains the variances of all the columns.
+print(attr(scaled_df, "scaled:scale"))
+
+d <- dist(scaled_df, method="euclidean")
+pfit <- hclust(d, method="ward.D2")
+
+# To examine `pfit`, type: summary(pfit) and pfit$height
+plot(pfit, labels=clusterSet$Country, main="Dendrogram for Diet Related Causes")
+rect.hclust(pfit, k=5) # k=5 means we want rectangles to be put around 5 clusters
+xx <- c(1, 7, 12, 19, 22)
+yy <- -4.5
+clusterID <- c(2,3,1,5,4)
+text(xx, yy, clusterID, col="red")
+```
+
+Now we will use cutree() to show the clusters and their values of selected variables.
+
+```{r cutree, echo=TRUE}
+d <- dist(scaled_df, method="euclidean")
+
+groups <- cutree(pfit, k=5)
+# print(groups)
+
+print_clusters <- function(df, groups, cols_to_print) {
+  Ngroups <- max(groups)
+  for (i in 1:Ngroups) {
+    print(paste("cluster", i))
+    print(df[groups == i, cols_to_print])
+  }
+}
+
+cols_to_print <- c("Country",'Diet.low.in.fruits.rate', 'Diet.low.in.Vegetables.rate','Diet.low.in.whole.grains.rate')
+print_clusters(clusterSet, groups, cols_to_print)
+```
+
+```{r plot_cluster, echo=TRUE}
+# Calculate the principal components of scaled_df
+princ <- prcomp(scaled_df) 
+nComp <- 2 # focus on the first two principal components
+
+# project scaled_df onto the first 2 principal components to form a new
+# 2-column data frame.
+project2D <- as.data.frame(predict(princ, newdata=scaled_df)[,1:nComp])
+
+# combine with `groups` and df$Country to form a 4-column data frame
+hclust.project2D <- cbind(project2D, cluster=as.factor(groups), country=df$Country)
+#head(hclust.project2D)
+
+# finding convex hull
+find_convex_hull <- function(proj2Ddf, groups) {
+  do.call(rbind,
+          lapply(unique(groups),
+                 FUN = function(c) {
+                   f <- subset(proj2Ddf, cluster==c);
+                   f[chull(f),]
+                 }
+          )
+  )
+}
+hclust.hull <- find_convex_hull(hclust.project2D, groups)
+
+fig_hclust <- ggplot(hclust.project2D, aes(x=PC1, y=PC2)) +
+  geom_point(aes(shape=cluster, color=cluster)) +
+  geom_text(aes(label=country, color=cluster), hjust=0, vjust=1, size=3) +
+  geom_polygon(data=hclust.hull, aes(group=cluster, fill=as.factor(cluster)),
+               alpha=0.4, linetype=0) + theme(text=element_text(size=20))
+
+print(fig_hclust)
+
+```
+
+
+```{r clusterboot, echo=TRUE}
+kbest.p <- 5
+cboot.hclust <- clusterboot(scaled_df, clustermethod=hclustCBI,
+                            method="ward.D2", k=kbest.p)
+
+#print(summary(cboot.hclust$result))
+
+groups.cboot <- cboot.hclust$result$partition
+print_clusters(clusterSet, groups.cboot, "Country")
+
+# cboot.hclust$bootbrd = number of times a cluster is dissolved.
+values <- 1 - cboot.hclust$bootbrd/100 # large values here => highly stable
+print(values)
+## [1] 0.75 0.79 0.52 0.75 0.60
+cat("So clusters", order(values)[5], "and", order(values)[4], "are highly stable")
+```
+
+```{r sel_k, echo=TRUE}
+sqr_euDist <- function(x, y) {
+  sum((x - y)^2)
+}
+
+# Function to calculate WSS of a cluster, represented as a n-by-d matrix
+# (where n and d are the numbers of rows and columns of the matrix)
+# which contains only points of the cluster.
+wss <- function(clustermat) {
+  c0 <- colMeans(clustermat)
+  sum(apply( clustermat, 1, FUN=function(row) {sqr_euDist(row, c0)} ))
+}
+
+# Function to calculate the total WSS. Argument `scaled_df`: data frame
+# with normalised numerical columns. Argument `labels`: vector containing
+# the cluster ID (starting at 1) for each row of the data frame.
+wss_total <- function(scaled_df, labels) {
+  wss.sum <- 0
+  k <- length(unique(labels))
+  for (i in 1:k)
+    wss.sum <- wss.sum + wss(subset(scaled_df, labels == i))
+  wss.sum
+}
+
+# Function to calculate total sum of squared (TSS) distance of data
+# points about the (global) mean. This is the same as WSS when the
+# number of clusters (k) is 1.
+tss <- function(scaled_df) {
+  wss(scaled_df)
+}
+# Function to return the CH indices computed using hierarchical
+# clustering (function `hclust`) or k-means clustering (`kmeans`)
+# for a vector of k values ranging from 1 to kmax.
+CH_index <- function(scaled_df, kmax, method="kmeans") {
+  if (!(method %in% c("kmeans", "hclust")))
+    stop("method must be one of c('kmeans', 'hclust')")
+  npts <- nrow(scaled_df)
+  wss.value <- numeric(kmax) # create a vector of numeric type
+  # wss.value[1] stores the WSS value for k=1 (when all the
+  # data points form 1 large cluster).
+  wss.value[1] <- wss(scaled_df)
+  if (method == "kmeans") {
+    # kmeans
+    for (k in 2:kmax) {
+      clustering <- kmeans(scaled_df, k, nstart=10, iter.max=100)
+      wss.value[k] <- clustering$tot.withinss
+    }
+  } else {
+    # hclust
+    d <- dist(scaled_df, method="euclidean")
+    pfit <- hclust(d, method="ward.D2")
+    for (k in 2:kmax) {
+      labels <- cutree(pfit, k=k)
+      wss.value[k] <- wss_total(scaled_df, labels)
+    }
+  }
+  bss.value <- tss(scaled_df) - wss.value # this is a vector
+  B <- bss.value / (0:(kmax-1)) # also a vector
+  W <- wss.value / (npts - 1:kmax) # also a vector
+  data.frame(k = 1:kmax, CH_index = B/W, WSS = wss.value)
+}
+
+# calculate the CH criterion
+crit.df <- CH_index(scaled_df, 10, method="hclust")
+
+fig1 <- ggplot(crit.df, aes(x=k, y=CH_index)) +
+  geom_point() + geom_line(colour="red") +
+  scale_x_continuous(breaks=1:10, labels=1:10) +
+  labs(y="CH index") + theme(text=element_text(size=20))
+fig2 <- ggplot(crit.df, aes(x=k, y=WSS), color="blue") +
+  geom_point() + geom_line(colour="blue") +
+  scale_x_continuous(breaks=1:10, labels=1:10) +
+  theme(text=element_text(size=20))
+
+grid.arrange(fig1, fig2, nrow=1)
+
+plot(pfit, labels=clusterSet$Country, main="Dendrogram for Diet Related Deaths")
+rect.hclust(pfit, k=8)
+```
 
 
 ## LIME evaluation 
