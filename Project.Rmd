@@ -689,9 +689,11 @@ clusterID <- c(2,3,1,5,4)
 text(xx, yy, clusterID, col="red")
 ```
 
-Now we will use cutree() to show the clusters and their values of selected variables.
+On this cluster dendrogram some countries within the same cluster are geographically close to each other. For example, in cluster 2 South Africa, Tanzania and Mali are all in Africa. In cluster 3, Denmark and Belgium are two European countries. In cluster 5, Serbia and Croatia are neighbors. In cluster 1, Tuvalu, Solomon Islands, Samoa and Vanuatu are all countries with islands in Oceania. 
 
-```{r cutree, echo=TRUE}
+Our interpretation is that countries that are close to each other share similar dietary habits, and therefore mortality rate of diet related causes are similar too. This clustering does show some pattern, although we are not sure yet if $k=5$ is the best option. Now we will visualise the clusters with 2 principle components.  
+
+```{r cutree, include=FALSE}
 d <- dist(scaled_df, method="euclidean")
 
 groups <- cutree(pfit, k=5)
@@ -718,9 +720,8 @@ nComp <- 2 # focus on the first two principal components
 # 2-column data frame.
 project2D <- as.data.frame(predict(princ, newdata=scaled_df)[,1:nComp])
 
-# combine with `groups` and df$Country to form a 4-column data frame
-hclust.project2D <- cbind(project2D, cluster=as.factor(groups), country=df$Country)
-#head(hclust.project2D)
+# combine with `groups` and clusterSet$Country to form a 4-column data frame
+hclust.project2D <- cbind(project2D, cluster=as.factor(groups), country=clusterSet$Country)
 
 # finding convex hull
 find_convex_hull <- function(proj2Ddf, groups) {
@@ -744,9 +745,11 @@ fig_hclust <- ggplot(hclust.project2D, aes(x=PC1, y=PC2)) +
 print(fig_hclust)
 
 ```
+Notice group 1, 2 and 4 are quite separated from each other while 3 and 5 seems to be close or even intersecting each other. Probably $k=5$ is not the best option.
 
+Now it is time to use measurements to see if we can spot a better k. We will use within sum of squares (WSS), total sum of squares (TSS), between sum of squares (BSS) to calculate Calinski-Harabasz index (CH index) 
 
-```{r clusterboot, echo=TRUE}
+```{r clusterboot, include=FALSE}
 kbest.p <- 5
 cboot.hclust <- clusterboot(scaled_df, clustermethod=hclustCBI,
                             method="ward.D2", k=kbest.p)
@@ -839,9 +842,68 @@ fig2 <- ggplot(crit.df, aes(x=k, y=WSS), color="blue") +
 
 grid.arrange(fig1, fig2, nrow=1)
 
+```
+
+Given 25 countries selected randomly, the CH index has the highest value when $k=8$ which local maximum is alsos observed when $k=2$. Let us plot the hierarchical clustering again with this $k=8$.
+
+```{r k_is_8, echo=TRUE}
 plot(pfit, labels=clusterSet$Country, main="Dendrogram for Diet Related Deaths")
 rect.hclust(pfit, k=8)
 ```
 
+In this dendrogram the pattern is clearer than the previous one in that neighbour countries form separate clusters of their own. Serbia and Croatia, Vietnam and Japan (both from Asian), Armenia, Russian and Kazakhstan, three islands in Oceania. 
+
+Let us compare the performance with kmeans clustering and see if the best k value changes.  
+
+```{r kmeans, echo=TRUE, warning=FALSE}
+# ----------------- Kmeans clustering -------------------
+kbest.p <- 5
+# run kmeans with 5 clusters, 100 random starts, and 100
+# maximum iterations per run.
+kmClusters <- kmeans(scaled_df, kbest.p, nstart=100, iter.max=100)
+
+kmClustering.ch <- kmeansruns(scaled_df, krange=1:10, criterion="ch")
+
+kmClustering.asw <- kmeansruns(scaled_df, krange=1:10, criterion="asw")
+
+
+hclusting <- CH_index(scaled_df, 10, method="hclust")
+cat("CH index from hclust for k=1 to 10:/n", hclusting$CH_index)
+
+kmCritframe <- data.frame(k=1:10, ch=kmClustering.ch$crit,
+                          asw=kmClustering.asw$crit)
+
+fig1 <- ggplot(kmCritframe, aes(x=k, y=ch)) +
+  geom_point() + geom_line(colour="red") +
+  scale_x_continuous(breaks=1:10, labels=1:10) +
+  labs(y="CH index") + theme(text=element_text(size=20))
+
+fig2 <- ggplot(kmCritframe, aes(x=k, y=asw)) +
+  geom_point() + geom_line(colour="blue") +
+  scale_x_continuous(breaks=1:10, labels=1:10) +
+  labs(y="ASW") + theme(text=element_text(size=20))
+grid.arrange(fig1, fig2, nrow=1)
+
+fig <- c()
+kvalues <- c(2,5,6,8)
+for (k in kvalues) {
+  groups <- kmeans(scaled_df, k, nstart=100, iter.max=100)$cluster
+  kmclust.project2D <- cbind(project2D, cluster=as.factor(groups),
+                             country=df$Country)
+  kmclust.hull <- find_convex_hull(kmclust.project2D, groups)
+  assign(paste0("fig", k),
+         ggplot(kmclust.project2D, aes(x=PC1, y=PC2)) +
+           geom_point(aes(shape=cluster, color=cluster)) +
+           geom_polygon(data=kmclust.hull, aes(group=cluster, fill=cluster),
+                        alpha=0.4, linetype=0) +
+           labs(title = sprintf("k = %d", k)) +
+           theme(legend.position="none", text=element_text(size=20))
+  )
+}
+
+grid.arrange(fig2, fig5, fig6, fig8, nrow=2)
+```
+
+Both CH index and average silhouette width (ASW) show a local maximum when $k=2$ and a highest value when $k=8$. This is in line with the observation from the hierarchical clustering. We can see in the visual comparison that clusters are farer apart from each other when $k=8$ than when k has other values.
 
 ## LIME evaluation 
