@@ -906,4 +906,6 @@ grid.arrange(fig2, fig5, fig6, fig8, nrow=2)
 
 Both CH index and average silhouette width (ASW) show a local maximum when $k=2$ and a highest value when $k=8$. This is in line with the observation from the hierarchical clustering. We can see in the visual comparison that clusters are farer apart from each other when $k=8$ than when k has other values.
 
-## LIME evaluation 
+### LIME evaluation 
+
+
