@@ -908,4 +908,75 @@ Both CH index and average silhouette width (ASW) show a local maximum when $k=2$
 
 ### LIME evaluation 
 
+In this section we would like to understand our predictions with local interpretable model-agnostic explanations (LIME).
+
+```{r lime, echo=TRUE, warning=FALSE}
+
+df_merged$class <- as.numeric(df_merged[outcome] == TRUE)
+pos <- 1
+
+set.seed(12345)
+intrain <- runif(nrow(df_merged)) < 0.75
+
+train <- df_merged[intrain, ]
+test <- df_merged[!intrain, ]
+
+cat("Training set size is ", dim(train), " and test set size is ", dim(test))
+
+# variables holding truth
+#responses <- colnames(df_merged) %in% c(outcome, "class")
+
+features <- ori_sel_colnames <- gsub("^pred\\.", "", selVars) # colnames(df_merged)[!responses]
+
+formula <- paste("class", paste(features, collapse=" + "), sep=" ~ ")
+
+model_logr <- glm(formula=formula, data=train, family=binomial(link="logit"))
+
+train$pred <- predict(model_logr, newdata=train, type="response")
+test$pred <- predict(model_logr, newdata=test, type="response")
+
+
+# ytrue should be a vector containing 1s (or TRUE) and 0s (or FALSE);
+# ypred should be a vector containing the predicted probability values for the target class.
+# Both ytrue and ypred should have the same length.
+performanceMeasures <- function(ytrue, ypred, model.name = "model", threshold=0.5) {
+  # compute the normalised deviance
+  dev.norm <- -2 * logLikelihood(ytrue, ypred)/length(ypred)
+  cmat <- table(actual = ytrue, predicted = ypred >= threshold)
+  accuracy <- sum(diag(cmat)) / sum(cmat)
+  precision <- cmat[2, 2] / sum(cmat[, 2])
+  recall <- cmat[2, 2] / sum(cmat[2, ])
+  f1 <- 2 * precision * recall / (precision + recall)
+  data.frame(model = model.name, precision = precision, recall = recall, 
+             f1 = f1, dev.norm = dev.norm)
+}
+
+# create confusion_matrix
+confusion_matrix <- function(ytrue, ypred, threshold=0.5) {
+  # compute the confusion matrix
+  cmat <- table(actual = ytrue, predicted = ypred >= threshold)
+  cmat
+}
+
+cases <- sample(nrow(test), size = 6)
+print(test[cases, c("class","pred")])
+
+cm <- confusion_matrix(test$class, test$pred)
+print(cm)
+# all feature vars
+##       predicted
+## actual FALSE TRUE
+##      0   719   26
+##      1    37  708
+
+pm <- performanceMeasures(test$class, test$pred, 'Logit')
+print(pm)
+# all feature vars
+##   model precision    recall        f1 dev.norm
+## 1 model 0.9645777 0.9503356 0.9574037      Inf
+
+# print(summary(model_logr))
+
+
+```
 

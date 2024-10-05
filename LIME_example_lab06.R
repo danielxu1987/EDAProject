@@ -1,7 +1,5 @@
 # Lab 06 LIME feature selection
-library(pander)
 library(knitr)
-library(caret)
 
 iris <- iris
 iris$class <- as.numeric(iris$Species == "setosa")

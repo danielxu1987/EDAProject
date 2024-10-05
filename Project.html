@@ -1275,19 +1275,19 @@ print(count_empty(df))</code></pre>
 <pre class="r"><code>empty_rows &lt;- df[df$Code == &#39;&#39;, ]
 print(empty_rows[sample(nrow(empty_rows), size = 6, replace = F), c(1:6)])</code></pre>
 <pre><code>##                              Entity Code Year Outdoor.air.pollution
-## 48             African Region (WHO)      2007                163407
-## 1990     Europe &amp; Central Asia (WB)      1999                611992
-## 6648         World Bank High Income      2007                393936
-## 4426                 OECD Countries      2005                432225
-## 1649       East Asia &amp; Pacific (WB)      2018               1817907
-## 6696 World Bank Lower Middle Income      1995                765065
+## 1994     Europe &amp; Central Asia (WB)      2003                594068
+## 6560                          Wales      2009                  1063
+## 2012          European Region (WHO)      1991                630469
+## 4413                 OECD Countries      1992                523355
+## 6705 World Bank Lower Middle Income      2004               1038096
+## 5677        Sub-Saharan Africa (WB)      1996                105274
 ##      High.systolic.blood.pressure Diet.high.in.sodium
-## 48                         544886               56375
-## 1990                      2541276              314647
-## 6648                      1725865              204329
-## 4426                      1868853              210322
-## 1649                      3842884             1103961
-## 6696                      2073989              278009</code></pre>
+## 1994                      2566024              315149
+## 6560                         5232                 362
+## 2012                      2425069              314023
+## 4413                      2149680              245780
+## 6705                      2599473              335781
+## 5677                       428412               52545</code></pre>
 <p>To make it easier to understand the sections below we rename
 <em>Entity</em> to <em>Country</em>. Also, because we will merge
 external data into this dataset based on country code, the aggregated
@@ -1322,12 +1322,12 @@ print(nacount)</code></pre>
 <pre class="r"><code>nas_df_merged &lt;- df_merged[is.na(df_merged$total.population),]
 nas_df_merged[sample(nrow(nas_df_merged), 6), 1:5]</code></pre>
 <pre><code>##          Code Year      Country Iron.deficiency total.population
-## 3994      NIU 1993         Niue               0               NA
-## 5646      TWN 1995       Taiwan               6               NA
-## 4207 OWID_WRL 1996        World           68510               NA
-## 5425      TKL 2014      Tokelau               0               NA
-## 1193      COK 2012 Cook Islands               0               NA
-## 4224 OWID_WRL 2013        World           49600               NA</code></pre>
+## 5650      TWN 1999       Taiwan               4               NA
+## 4223 OWID_WRL 2012        World           50748               NA
+## 1180      COK 1999 Cook Islands               0               NA
+## 1192      COK 2011 Cook Islands               0               NA
+## 4017      NIU 2016         Niue               0               NA
+## 4211 OWID_WRL 2000        World           67827               NA</code></pre>
 <p>It appears that some islands and the total value of the whole world
 from the original death causes are also included which results in 150
 NA’s in total population. This is only 2.4390244% of all dataset. Since
@@ -1337,13 +1337,13 @@ drop them.</p>
 
 # Our new dataset looks like:
 df_merged[sample(nrow(df_merged), 6), 1:5]</code></pre>
-<pre><code>##      Code Year         Country Iron.deficiency total.population
-## 3978  NLD 2007     Netherlands               1         16381696
-## 4746  SLB 1995 Solomon Islands              10           375189
-## 1966  GHA 2005           Ghana             355         22496951
-## 1541  DZA 2000         Algeria             168         30774621
-## 2936  KOR 2015     South Korea               6         51014947
-## 3192  LTU 2001       Lithuania               1          3470818</code></pre>
+<pre><code>##      Code Year     Country Iron.deficiency total.population
+## 5747  VEN 2006   Venezuela              48         27102081
+## 5027  SVK 2006    Slovakia               0          5373054
+## 5794  VNM 1993     Vietnam             119         71176405
+## 73    ALB 2002     Albania               1          3051010
+## 4238  PHL 1997 Philippines             343         72718837
+## 4880  SOM 2009     Somalia             694         11730037</code></pre>
 <p>Now that total population is merged and tidied up, we would like to
 know which death causes have large impact worldwide. Since the absolute
 number of mortality can vary largely depending on the population of a
@@ -2045,9 +2045,572 @@ when <span class="math inline">\(k=2\)</span> and a highest value when
 <span class="math inline">\(k=8\)</span>. This is in line with the
 observation from the hierarchical clustering. We can see in the visual
 comparison that clusters are farer apart from each other when <span class="math inline">\(k=8\)</span> than when k has other values.</p>
+<div id="lime-evaluation" class="section level3">
+<h3>LIME evaluation</h3>
+<p>In this section we would like to understand our predictions with
+local interpretable model-agnostic explanations (LIME).</p>
+<pre class="r"><code>df_merged$class &lt;- as.numeric(df_merged[outcome] == TRUE)
+pos &lt;- 1
+
+set.seed(12345)
+intrain &lt;- runif(nrow(df_merged)) &lt; 0.75
+
+train &lt;- df_merged[intrain, ]
+test &lt;- df_merged[!intrain, ]
+
+cat(&quot;Training set size is &quot;, dim(train), &quot; and test set size is &quot;, dim(test))</code></pre>
+<pre><code>## Training set size is  4510 66  and test set size is  1490 66</code></pre>
+<pre class="r"><code># variables holding truth
+#responses &lt;- colnames(df_merged) %in% c(outcome, &quot;class&quot;)
+
+features &lt;- ori_sel_colnames &lt;- gsub(&quot;^pred\\.&quot;, &quot;&quot;, selVars) # colnames(df_merged)[!responses]
+
+formula &lt;- paste(&quot;class&quot;, paste(features, collapse=&quot; + &quot;), sep=&quot; ~ &quot;)
+
+model_logr &lt;- glm(formula=formula, data=train, family=binomial(link=&quot;logit&quot;))
+
+train$pred &lt;- predict(model_logr, newdata=train, type=&quot;response&quot;)
+test$pred &lt;- predict(model_logr, newdata=test, type=&quot;response&quot;)
+
+
+# ytrue should be a vector containing 1s (or TRUE) and 0s (or FALSE);
+# ypred should be a vector containing the predicted probability values for the target class.
+# Both ytrue and ypred should have the same length.
+performanceMeasures &lt;- function(ytrue, ypred, model.name = &quot;model&quot;, threshold=0.5) {
+  # compute the normalised deviance
+  dev.norm &lt;- -2 * logLikelihood(ytrue, ypred)/length(ypred)
+  cmat &lt;- table(actual = ytrue, predicted = ypred &gt;= threshold)
+  accuracy &lt;- sum(diag(cmat)) / sum(cmat)
+  precision &lt;- cmat[2, 2] / sum(cmat[, 2])
+  recall &lt;- cmat[2, 2] / sum(cmat[2, ])
+  f1 &lt;- 2 * precision * recall / (precision + recall)
+  data.frame(model = model.name, precision = precision, recall = recall, 
+             f1 = f1, dev.norm = dev.norm)
+}
+
+# create confusion_matrix
+confusion_matrix &lt;- function(ytrue, ypred, threshold=0.5) {
+  # compute the confusion matrix
+  cmat &lt;- table(actual = ytrue, predicted = ypred &gt;= threshold)
+  cmat
+}
+
+cases &lt;- sample(nrow(test), size = 6)
+print(test[cases, c(&quot;class&quot;,&quot;pred&quot;)])</code></pre>
+<pre><code>##      class         pred
+## 1823     0 1.931852e-11
+## 4        1 9.998610e-01
+## 4827     0 1.391373e-10
+## 538      1 1.000000e+00
+## 5449     0 7.704680e-11
+## 2177     0 2.674278e-10</code></pre>
+<pre class="r"><code>cm &lt;- confusion_matrix(test$class, test$pred)
+print(cm)</code></pre>
+<pre><code>##       predicted
+## actual FALSE TRUE
+##      0   705   40
+##      1    48  697</code></pre>
+<pre class="r"><code># all feature vars
+##       predicted
+## actual FALSE TRUE
+##      0   719   26
+##      1    37  708
+
+pm &lt;- performanceMeasures(test$class, test$pred, &#39;Logit&#39;)
+print(pm)</code></pre>
+<pre><code>##   model precision    recall        f1 dev.norm
+## 1 Logit 0.9457259 0.9355705 0.9406208      Inf</code></pre>
+<pre class="r"><code># all feature vars
+##   model precision    recall        f1 dev.norm
+## 1 model 0.9645777 0.9503356 0.9574037      Inf
+
+print(summary(model_logr))</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = formula, family = binomial(link = &quot;logit&quot;), data = train)
+## 
+## Coefficients:
+##                                           Estimate Std. Error z value Pr(&gt;|z|)
+## (Intercept)                              9.895e+00  2.209e+00   4.479 7.50e-06
+## Unsafe.sex.over.medianTRUE              -5.728e-01  3.668e-01  -1.562 0.118359
+## Smoking.over.medianTRUE                 -3.325e+00  1.048e+00  -3.172 0.001515
+## Blood.pressure.over.medianTRUE          -1.332e+00  4.239e-01  -3.141 0.001684
+## CountryAlbania                          -5.540e+00  2.393e+00  -2.315 0.020587
+## CountryAlgeria                          -2.160e+01  5.817e+03  -0.004 0.997037
+## CountryAmerican Samoa                   -7.120e+00  2.539e+00  -2.805 0.005037
+## CountryAndorra                          -2.725e+01  5.851e+03  -0.005 0.996284
+## CountryAngola                           -8.624e+00  1.997e+00  -4.319 1.57e-05
+## CountryAntigua and Barbuda              -3.045e+01  6.831e+03  -0.004 0.996444
+## CountryArgentina                        -1.418e+01  6.602e+03  -0.002 0.998286
+## CountryArmenia                           1.711e+01  5.827e+03   0.003 0.997658
+## CountryAustralia                        -2.135e+01  5.501e+03  -0.004 0.996903
+## CountryAustria                           1.883e+01  5.180e+03   0.004 0.997099
+## CountryAzerbaijan                        1.901e+01  5.750e+03   0.003 0.997362
+## CountryBahamas                          -3.029e+01  5.469e+03  -0.006 0.995580
+## CountryBahrain                          -2.734e+01  5.179e+03  -0.005 0.995788
+## CountryBangladesh                       -4.040e+00  1.169e+01  -0.345 0.729743
+## CountryBarbados                         -7.793e+00  2.244e+00  -3.473 0.000514
+## CountryBelarus                           1.924e+01  5.396e+03   0.004 0.997156
+## CountryBelgium                          -1.878e+00  2.064e+00  -0.910 0.362879
+## CountryBelize                           -2.902e+01  5.837e+03  -0.005 0.996033
+## CountryBenin                            -5.781e+00  1.736e+00  -3.329 0.000871
+## CountryBermuda                          -2.690e+01  5.712e+03  -0.005 0.996243
+## CountryBhutan                           -8.422e+00  2.199e+00  -3.829 0.000128
+## CountryBolivia                          -2.730e+01  5.428e+03  -0.005 0.995987
+## CountryBosnia and Herzegovina            1.717e+01  5.969e+03   0.003 0.997705
+## CountryBotswana                          1.511e+01  5.492e+03   0.003 0.997805
+## CountryBrazil                            1.086e+01  3.492e+03   0.003 0.997520
+## CountryBrunei                           -2.677e+01  5.364e+03  -0.005 0.996019
+## CountryBulgaria                          1.844e+01  5.480e+03   0.003 0.997315
+## CountryBurkina Faso                      1.214e+01  5.313e+03   0.002 0.998177
+## CountryBurundi                          -7.215e+00  1.777e+00  -4.059 4.92e-05
+## CountryCambodia                         -1.416e+00  2.068e+00  -0.685 0.493592
+## CountryCameroon                         -7.503e+00  2.217e+00  -3.384 0.000716
+## CountryCanada                           -1.729e+01  5.231e+03  -0.003 0.997362
+## CountryCape Verde                       -1.088e+01  2.396e+00  -4.542 5.58e-06
+## CountryCentral African Republic          1.170e+01  5.548e+03   0.002 0.998318
+## CountryChad                              3.181e+00  4.275e+03   0.001 0.999406
+## CountryChile                            -2.211e+01  5.620e+03  -0.004 0.996862
+## CountryChina                             4.949e+02  2.821e+03   0.175 0.860731
+## CountryColombia                         -1.603e+01  6.527e+03  -0.002 0.998041
+## CountryComoros                          -6.913e+00  2.201e+00  -3.141 0.001685
+## CountryCongo                            -6.269e+00  1.988e+00  -3.153 0.001615
+## CountryCosta Rica                       -2.581e+01  5.604e+03  -0.005 0.996325
+## CountryCote d&#39;Ivoire                    -3.101e+00  1.332e+00  -2.329 0.019861
+## CountryCroatia                           1.724e+01  5.940e+03   0.003 0.997684
+## CountryCuba                             -4.063e+00  2.094e+00  -1.941 0.052269
+## CountryCyprus                           -7.169e+00  2.479e+00  -2.892 0.003830
+## CountryCzechia                           2.050e+01  6.052e+03   0.003 0.997297
+## CountryDemocratic Republic of Congo     -1.299e+01  5.752e+00  -2.258 0.023960
+## CountryDenmark                          -2.755e+00  2.288e+00  -1.204 0.228557
+## CountryDjibouti                         -8.947e+00  2.197e+00  -4.073 4.64e-05
+## CountryDominica                          1.329e+01  6.256e+03   0.002 0.998305
+## CountryDominican Republic               -2.698e+01  4.993e+03  -0.005 0.995689
+## CountryEast Timor                       -7.317e+00  2.179e+00  -3.357 0.000787
+## CountryEcuador                          -2.600e+01  6.070e+03  -0.004 0.996582
+## CountryEgypt                             1.818e+00  3.243e+00   0.561 0.575135
+## CountryEl Salvador                      -2.807e+01  5.890e+03  -0.005 0.996197
+## CountryEquatorial Guinea                -7.971e+00  2.184e+00  -3.649 0.000263
+## CountryEritrea                           1.287e+01  5.763e+03   0.002 0.998219
+## CountryEstonia                           1.649e+01  5.836e+03   0.003 0.997746
+## CountryEswatini                         -5.154e+00  2.229e+00  -2.312 0.020780
+## CountryEthiopia                         -1.477e+01  7.621e+00  -1.937 0.052691
+## CountryFiji                              1.512e+01  5.174e+03   0.003 0.997669
+## CountryFinland                           1.785e+01  5.697e+03   0.003 0.997499
+## CountryFrance                           -6.757e+00  5.667e+03  -0.001 0.999049
+## CountryGabon                            -6.914e+00  2.149e+00  -3.217 0.001294
+## CountryGambia                           -7.019e+00  2.139e+00  -3.281 0.001033
+## CountryGeorgia                           1.598e+01  5.323e+03   0.003 0.997605
+## CountryGermany                           4.404e+01  5.854e+03   0.008 0.993998
+## CountryGhana                            -6.528e+00  1.560e+00  -4.185 2.85e-05
+## CountryGreece                            1.958e+01  5.440e+03   0.004 0.997128
+## CountryGreenland                        -2.569e+01  5.439e+03  -0.005 0.996231
+## CountryGrenada                          -1.214e+01  2.436e+00  -4.983 6.25e-07
+## CountryGuam                             -2.724e+01  5.372e+03  -0.005 0.995953
+## CountryGuatemala                        -9.686e+00  1.710e+00  -5.665 1.47e-08
+## CountryGuinea                            1.413e+01  5.511e+03   0.003 0.997954
+## CountryGuinea-Bissau                    -5.043e+00  2.215e+00  -2.277 0.022813
+## CountryGuyana                            1.422e+01  6.197e+03   0.002 0.998169
+## CountryHaiti                             1.541e+01  5.751e+03   0.003 0.997862
+## CountryHonduras                         -2.850e+01  5.554e+03  -0.005 0.995907
+## CountryHungary                           1.947e+01  5.642e+03   0.003 0.997247
+## CountryIceland                          -2.757e+01  5.550e+03  -0.005 0.996037
+## CountryIndia                             9.035e+01  2.083e+03   0.043 0.965402
+## CountryIndonesia                        -3.207e+01  2.373e+03  -0.014 0.989219
+## CountryIran                             -1.064e+01  5.063e+03  -0.002 0.998324
+## CountryIraq                             -2.899e+00  1.323e+00  -2.191 0.028483
+## CountryIreland                          -5.291e+00  2.335e+00  -2.266 0.023456
+## CountryIsrael                           -2.563e+01  5.232e+03  -0.005 0.996092
+## CountryItaly                             3.641e+01  5.754e+03   0.006 0.994951
+## CountryJamaica                          -2.878e+01  5.034e+03  -0.006 0.995439
+## CountryJapan                             1.533e+01  6.050e+03   0.003 0.997978
+## CountryJordan                           -2.494e+01  5.480e+03  -0.005 0.996369
+## CountryKazakhstan                        2.171e+01  5.658e+03   0.004 0.996938
+## CountryKenya                            -7.448e+00  2.376e+00  -3.135 0.001718
+## CountryKiribati                          1.806e+01  5.993e+03   0.003 0.997595
+## CountryKuwait                           -2.696e+01  5.112e+03  -0.005 0.995793
+## CountryKyrgyzstan                       -2.394e+00  2.275e+00  -1.052 0.292604
+## CountryLaos                             -4.342e+00  1.992e+00  -2.180 0.029293
+## CountryLatvia                            1.673e+01  5.415e+03   0.003 0.997534
+## CountryLebanon                          -2.622e+01  5.920e+03  -0.004 0.996465
+## CountryLesotho                           1.434e+01  5.591e+03   0.003 0.997953
+## CountryLiberia                          -6.629e+00  2.011e+00  -3.297 0.000976
+## CountryLibya                            -2.932e+01  5.643e+03  -0.005 0.995855
+## CountryLithuania                         1.692e+01  5.279e+03   0.003 0.997442
+## CountryLuxembourg                       -6.608e+00  2.508e+00  -2.635 0.008416
+## CountryMadagascar                       -1.045e+01  2.096e+00  -4.985 6.19e-07
+## CountryMalawi                           -6.293e+00  1.573e+00  -4.001 6.31e-05
+## CountryMalaysia                         -2.055e+01  5.654e+03  -0.004 0.997099
+## CountryMaldives                         -2.688e+01  5.484e+03  -0.005 0.996089
+## CountryMali                              1.206e+01  5.121e+03   0.002 0.998120
+## CountryMalta                            -5.859e+00  2.502e+00  -2.342 0.019182
+## CountryMarshall Islands                 -8.314e+00  2.236e+00  -3.718 0.000201
+## CountryMauritania                       -7.701e+00  2.038e+00  -3.779 0.000158
+## CountryMauritius                        -3.613e+00  2.521e+00  -1.433 0.151872
+## CountryMexico                           -5.977e+00  3.710e+03  -0.002 0.998715
+## CountryMicronesia (country)              1.774e+01  5.484e+03   0.003 0.997419
+## CountryMoldova                           1.692e+01  5.299e+03   0.003 0.997453
+## CountryMonaco                            1.601e+01  5.270e+03   0.003 0.997576
+## CountryMongolia                          1.679e+01  5.345e+03   0.003 0.997493
+## CountryMontenegro                        1.634e+01  6.163e+03   0.003 0.997885
+## CountryMorocco                          -2.613e+00  1.308e+00  -1.998 0.045678
+## CountryMozambique                       -1.215e+00  1.405e+00  -0.865 0.386857
+## CountryMyanmar                           3.143e+01  4.610e+03   0.007 0.994560
+## CountryNamibia                          -3.498e+00  2.324e+00  -1.505 0.132309
+## CountryNauru                            -4.580e+00  2.513e+00  -1.823 0.068363
+## CountryNepal                            -2.661e+00  1.871e+00  -1.423 0.154815
+## CountryNetherlands                      -1.476e+00  1.895e+00  -0.779 0.436127
+## CountryNew Zealand                      -2.642e+01  5.698e+03  -0.005 0.996300
+## CountryNicaragua                        -2.838e+01  5.615e+03  -0.005 0.995968
+## CountryNiger                             4.623e+00  5.139e+03   0.001 0.999282
+## CountryNigeria                          -3.176e+01  2.730e+01  -1.164 0.244610
+## CountryNorth Korea                       2.577e+01  5.569e+03   0.005 0.996308
+## CountryNorth Macedonia                   1.662e+01  5.635e+03   0.003 0.997647
+## CountryNorthern Mariana Islands         -6.826e+00  2.575e+00  -2.651 0.008028
+## CountryNorway                           -4.654e+00  2.314e+00  -2.011 0.044344
+## CountryOman                             -2.941e+01  5.717e+03  -0.005 0.995896
+## CountryPakistan                          3.638e+01  1.271e+01   2.863 0.004193
+## CountryPalau                            -2.097e+00  2.542e+00  -0.825 0.409308
+## CountryPalestine                        -2.858e+01  5.768e+03  -0.005 0.996047
+## CountryPanama                           -2.907e+01  5.562e+03  -0.005 0.995829
+## CountryPapua New Guinea                  1.566e+01  5.678e+03   0.003 0.997799
+## CountryParaguay                         -2.454e+01  5.646e+03  -0.004 0.996532
+## CountryPeru                             -2.220e+01  5.096e+03  -0.004 0.996525
+## CountryPhilippines                      -1.257e+01  4.514e+03  -0.003 0.997778
+## CountryPoland                            2.915e+01  6.017e+03   0.005 0.996134
+## CountryPortugal                         -8.761e-01  2.094e+00  -0.418 0.675733
+## CountryPuerto Rico                      -7.111e+00  2.254e+00  -3.155 0.001604
+## CountryQatar                            -2.927e+01  5.492e+03  -0.005 0.995748
+## CountryRomania                           2.292e+01  5.206e+03   0.004 0.996488
+## CountryRussia                            6.562e+01  5.221e+03   0.013 0.989972
+## CountryRwanda                           -7.013e+00  1.754e+00  -3.999 6.37e-05
+## CountrySaint Kitts and Nevis            -8.730e+00  2.260e+00  -3.863 0.000112
+## CountrySaint Lucia                      -2.969e+01  5.644e+03  -0.005 0.995803
+## CountrySaint Vincent and the Grenadines -9.696e+00  2.254e+00  -4.301 1.70e-05
+## CountrySamoa                            -2.373e+00  2.532e+00  -0.937 0.348630
+## CountrySan Marino                       -2.759e+01  5.515e+03  -0.005 0.996008
+## CountrySao Tome and Principe            -8.605e+00  2.237e+00  -3.847 0.000120
+## CountrySaudi Arabia                     -2.380e+01  5.016e+03  -0.005 0.996213
+## CountrySenegal                          -7.577e+00  1.661e+00  -4.563 5.03e-06
+## CountrySerbia                            1.853e+01  5.560e+03   0.003 0.997340
+## CountrySeychelles                       -2.709e+01  5.229e+03  -0.005 0.995866
+## CountrySierra Leone                     -4.612e+00  1.925e+00  -2.396 0.016578
+## CountrySingapore                        -2.586e+01  5.421e+03  -0.005 0.996194
+## CountrySlovakia                          1.785e+01  5.235e+03   0.003 0.997279
+## CountrySlovenia                         -1.692e+00  2.608e+00  -0.649 0.516487
+## CountrySolomon Islands                   1.756e+01  5.324e+03   0.003 0.997369
+## CountrySomalia                           9.980e+00  5.114e+03   0.002 0.998443
+## CountrySouth Africa                      6.561e+00  2.044e+00   3.210 0.001330
+## CountrySouth Korea                      -1.174e+01  5.255e+03  -0.002 0.998217
+## CountrySouth Sudan                      -7.101e+00  1.730e+00  -4.104 4.06e-05
+## CountrySpain                             5.747e+00  1.847e+00   3.113 0.001855
+## CountrySri Lanka                        -2.380e+01  5.472e+03  -0.004 0.996530
+## CountrySudan                            -3.032e+00  1.837e+00  -1.650 0.098900
+## CountrySuriname                         -2.843e+01  4.808e+03  -0.006 0.995282
+## CountrySweden                           -2.205e+00  2.129e+00  -1.036 0.300350
+## CountrySwitzerland                      -4.275e+00  2.195e+00  -1.948 0.051403
+## CountrySyria                            -2.280e+01  5.619e+03  -0.004 0.996762
+## CountryTajikistan                       -7.497e+00  1.836e+00  -4.083 4.44e-05
+## CountryTanzania                          2.167e-01  2.107e+00   0.103 0.918078
+## CountryThailand                         -6.691e+00  4.788e+03  -0.001 0.998885
+## CountryTogo                             -7.249e+00  1.856e+00  -3.906 9.38e-05
+## CountryTonga                            -2.584e+01  5.570e+03  -0.005 0.996298
+## CountryTrinidad and Tobago              -4.346e+00  2.277e+00  -1.909 0.056286
+## CountryTunisia                          -2.446e+01  5.797e+03  -0.004 0.996633
+## CountryTurkey                           -7.672e+00  4.888e+03  -0.002 0.998748
+## CountryTurkmenistan                     -7.469e+00  2.014e+00  -3.708 0.000209
+## CountryTuvalu                            1.674e+01  5.819e+03   0.003 0.997704
+## CountryUganda                           -3.469e+00  1.474e+00  -2.353 0.018630
+## CountryUkraine                           3.203e+01  5.435e+03   0.006 0.995298
+## CountryUnited Arab Emirates             -2.912e+01  5.202e+03  -0.006 0.995533
+## CountryUnited Kingdom                    1.605e+01  2.431e+00   6.602 4.05e-11
+## CountryUnited States                     9.024e+01  1.548e+01   5.828 5.60e-09
+## CountryUnited States Virgin Islands     -9.275e+00  2.251e+00  -4.119 3.80e-05
+## CountryUruguay                          -6.485e+00  2.410e+00  -2.691 0.007128
+## CountryUzbekistan                        2.897e+00  1.363e+00   2.125 0.033547
+## CountryVanuatu                           1.386e+01  5.539e+03   0.003 0.998004
+## CountryVenezuela                        -2.010e+01  5.726e+03  -0.004 0.997199
+## CountryVietnam                          -4.340e+00  5.235e+03  -0.001 0.999338
+## CountryYemen                            -6.265e+00  1.637e+00  -3.828 0.000129
+## CountryZambia                           -5.737e+00  1.544e+00  -3.717 0.000202
+## CountryZimbabwe                         -3.137e+00  1.603e+00  -1.956 0.050419
+## Year1991                                -2.892e-01  5.850e-01  -0.494 0.621057
+## Year1992                                -2.333e-01  6.053e-01  -0.385 0.699935
+## Year1993                                 5.048e-01  6.146e-01   0.821 0.411499
+## Year1994                                 6.419e-01  6.101e-01   1.052 0.292753
+## Year1995                                 1.348e+00  6.429e-01   2.097 0.036022
+## Year1996                                 7.407e-01  6.191e-01   1.196 0.231538
+## Year1997                                 4.901e-01  5.901e-01   0.830 0.406279
+## Year1998                                 3.133e-01  6.182e-01   0.507 0.612351
+## Year1999                                 1.466e-01  6.138e-01   0.239 0.811170
+## Year2000                                -3.722e-01  5.887e-01  -0.632 0.527252
+## Year2001                                -4.774e-01  6.189e-01  -0.771 0.440456
+## Year2002                                -8.883e-01  6.092e-01  -1.458 0.144801
+## Year2003                                -6.533e-01  5.896e-01  -1.108 0.267807
+## Year2004                                -6.892e-01  5.778e-01  -1.193 0.232939
+## Year2005                                -8.871e-01  5.960e-01  -1.488 0.136653
+## Year2006                                -9.967e-01  6.165e-01  -1.617 0.105920
+## Year2007                                -1.264e+00  5.887e-01  -2.148 0.031726
+## Year2008                                -1.749e+00  5.935e-01  -2.947 0.003209
+## Year2009                                -1.784e+00  6.013e-01  -2.966 0.003013
+## Year2010                                -1.627e+00  6.047e-01  -2.690 0.007138
+## Year2011                                -1.667e+00  6.084e-01  -2.740 0.006141
+## Year2012                                -1.915e+00  6.093e-01  -3.143 0.001674
+## Year2013                                -1.613e+00  6.028e-01  -2.676 0.007454
+## Year2014                                -2.184e+00  6.109e-01  -3.575 0.000351
+## Year2015                                -1.551e+00  6.174e-01  -2.512 0.012008
+## Year2016                                -1.914e+00  6.277e-01  -3.050 0.002290
+## Year2017                                -1.924e+00  6.363e-01  -3.023 0.002501
+## Year2018                                -1.579e+00  6.341e-01  -2.491 0.012744
+## Year2019                                -1.484e+00  6.217e-01  -2.387 0.016969
+## total.population                        -3.442e-07  6.113e-08  -5.631 1.79e-08
+## Unsafe.sanitation                        8.592e-04  1.567e-04   5.485 4.14e-08
+##                                            
+## (Intercept)                             ***
+## Unsafe.sex.over.medianTRUE                 
+## Smoking.over.medianTRUE                 ** 
+## Blood.pressure.over.medianTRUE          ** 
+## CountryAlbania                          *  
+## CountryAlgeria                             
+## CountryAmerican Samoa                   ** 
+## CountryAndorra                             
+## CountryAngola                           ***
+## CountryAntigua and Barbuda                 
+## CountryArgentina                           
+## CountryArmenia                             
+## CountryAustralia                           
+## CountryAustria                             
+## CountryAzerbaijan                          
+## CountryBahamas                             
+## CountryBahrain                             
+## CountryBangladesh                          
+## CountryBarbados                         ***
+## CountryBelarus                             
+## CountryBelgium                             
+## CountryBelize                              
+## CountryBenin                            ***
+## CountryBermuda                             
+## CountryBhutan                           ***
+## CountryBolivia                             
+## CountryBosnia and Herzegovina              
+## CountryBotswana                            
+## CountryBrazil                              
+## CountryBrunei                              
+## CountryBulgaria                            
+## CountryBurkina Faso                        
+## CountryBurundi                          ***
+## CountryCambodia                            
+## CountryCameroon                         ***
+## CountryCanada                              
+## CountryCape Verde                       ***
+## CountryCentral African Republic            
+## CountryChad                                
+## CountryChile                               
+## CountryChina                               
+## CountryColombia                            
+## CountryComoros                          ** 
+## CountryCongo                            ** 
+## CountryCosta Rica                          
+## CountryCote d&#39;Ivoire                    *  
+## CountryCroatia                             
+## CountryCuba                             .  
+## CountryCyprus                           ** 
+## CountryCzechia                             
+## CountryDemocratic Republic of Congo     *  
+## CountryDenmark                             
+## CountryDjibouti                         ***
+## CountryDominica                            
+## CountryDominican Republic                  
+## CountryEast Timor                       ***
+## CountryEcuador                             
+## CountryEgypt                               
+## CountryEl Salvador                         
+## CountryEquatorial Guinea                ***
+## CountryEritrea                             
+## CountryEstonia                             
+## CountryEswatini                         *  
+## CountryEthiopia                         .  
+## CountryFiji                                
+## CountryFinland                             
+## CountryFrance                              
+## CountryGabon                            ** 
+## CountryGambia                           ** 
+## CountryGeorgia                             
+## CountryGermany                             
+## CountryGhana                            ***
+## CountryGreece                              
+## CountryGreenland                           
+## CountryGrenada                          ***
+## CountryGuam                                
+## CountryGuatemala                        ***
+## CountryGuinea                              
+## CountryGuinea-Bissau                    *  
+## CountryGuyana                              
+## CountryHaiti                               
+## CountryHonduras                            
+## CountryHungary                             
+## CountryIceland                             
+## CountryIndia                               
+## CountryIndonesia                           
+## CountryIran                                
+## CountryIraq                             *  
+## CountryIreland                          *  
+## CountryIsrael                              
+## CountryItaly                               
+## CountryJamaica                             
+## CountryJapan                               
+## CountryJordan                              
+## CountryKazakhstan                          
+## CountryKenya                            ** 
+## CountryKiribati                            
+## CountryKuwait                              
+## CountryKyrgyzstan                          
+## CountryLaos                             *  
+## CountryLatvia                              
+## CountryLebanon                             
+## CountryLesotho                             
+## CountryLiberia                          ***
+## CountryLibya                               
+## CountryLithuania                           
+## CountryLuxembourg                       ** 
+## CountryMadagascar                       ***
+## CountryMalawi                           ***
+## CountryMalaysia                            
+## CountryMaldives                            
+## CountryMali                                
+## CountryMalta                            *  
+## CountryMarshall Islands                 ***
+## CountryMauritania                       ***
+## CountryMauritius                           
+## CountryMexico                              
+## CountryMicronesia (country)                
+## CountryMoldova                             
+## CountryMonaco                              
+## CountryMongolia                            
+## CountryMontenegro                          
+## CountryMorocco                          *  
+## CountryMozambique                          
+## CountryMyanmar                             
+## CountryNamibia                             
+## CountryNauru                            .  
+## CountryNepal                               
+## CountryNetherlands                         
+## CountryNew Zealand                         
+## CountryNicaragua                           
+## CountryNiger                               
+## CountryNigeria                             
+## CountryNorth Korea                         
+## CountryNorth Macedonia                     
+## CountryNorthern Mariana Islands         ** 
+## CountryNorway                           *  
+## CountryOman                                
+## CountryPakistan                         ** 
+## CountryPalau                               
+## CountryPalestine                           
+## CountryPanama                              
+## CountryPapua New Guinea                    
+## CountryParaguay                            
+## CountryPeru                                
+## CountryPhilippines                         
+## CountryPoland                              
+## CountryPortugal                            
+## CountryPuerto Rico                      ** 
+## CountryQatar                               
+## CountryRomania                             
+## CountryRussia                              
+## CountryRwanda                           ***
+## CountrySaint Kitts and Nevis            ***
+## CountrySaint Lucia                         
+## CountrySaint Vincent and the Grenadines ***
+## CountrySamoa                               
+## CountrySan Marino                          
+## CountrySao Tome and Principe            ***
+## CountrySaudi Arabia                        
+## CountrySenegal                          ***
+## CountrySerbia                              
+## CountrySeychelles                          
+## CountrySierra Leone                     *  
+## CountrySingapore                           
+## CountrySlovakia                            
+## CountrySlovenia                            
+## CountrySolomon Islands                     
+## CountrySomalia                             
+## CountrySouth Africa                     ** 
+## CountrySouth Korea                         
+## CountrySouth Sudan                      ***
+## CountrySpain                            ** 
+## CountrySri Lanka                           
+## CountrySudan                            .  
+## CountrySuriname                            
+## CountrySweden                              
+## CountrySwitzerland                      .  
+## CountrySyria                               
+## CountryTajikistan                       ***
+## CountryTanzania                            
+## CountryThailand                            
+## CountryTogo                             ***
+## CountryTonga                               
+## CountryTrinidad and Tobago              .  
+## CountryTunisia                             
+## CountryTurkey                              
+## CountryTurkmenistan                     ***
+## CountryTuvalu                              
+## CountryUganda                           *  
+## CountryUkraine                             
+## CountryUnited Arab Emirates                
+## CountryUnited Kingdom                   ***
+## CountryUnited States                    ***
+## CountryUnited States Virgin Islands     ***
+## CountryUruguay                          ** 
+## CountryUzbekistan                       *  
+## CountryVanuatu                             
+## CountryVenezuela                           
+## CountryVietnam                             
+## CountryYemen                            ***
+## CountryZambia                           ***
+## CountryZimbabwe                         .  
+## Year1991                                   
+## Year1992                                   
+## Year1993                                   
+## Year1994                                   
+## Year1995                                *  
+## Year1996                                   
+## Year1997                                   
+## Year1998                                   
+## Year1999                                   
+## Year2000                                   
+## Year2001                                   
+## Year2002                                   
+## Year2003                                   
+## Year2004                                   
+## Year2005                                   
+## Year2006                                   
+## Year2007                                *  
+## Year2008                                ** 
+## Year2009                                ** 
+## Year2010                                ** 
+## Year2011                                ** 
+## Year2012                                ** 
+## Year2013                                ** 
+## Year2014                                ***
+## Year2015                                *  
+## Year2016                                ** 
+## Year2017                                ** 
+## Year2018                                *  
+## Year2019                                *  
+## total.population                        ***
+## Unsafe.sanitation                       ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 6252.2  on 4509  degrees of freedom
+## Residual deviance: 1283.2  on 4276  degrees of freedom
+## AIC: 1751.2
+## 
+## Number of Fisher Scoring iterations: 20</code></pre>
 </div>
-<div id="lime-evaluation" class="section level2">
-<h2>LIME evaluation</h2>
 </div>
 
 
