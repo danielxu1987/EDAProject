@@ -16,7 +16,8 @@ library(knitr)
 library(dplyr)
 library(fpc)
 library('grDevices')
-
+library(xgboost)
+library(lime)
 
 # load dataset
 df_original <- read.csv("./Countries and death causes.csv",header = T, sep=",")
@@ -908,33 +909,29 @@ Both CH index and average silhouette width (ASW) show a local maximum when $k=2$
 
 ### LIME evaluation 
 
-In this section we would like to understand our predictions with local interpretable model-agnostic explanations (LIME).
+In this section we would like to understand our predictions with local interpretable model-agnostic explanations (LIME).  Firstly, we will use the generalised linear model (glm) to predict `r outcome`. Since we will use the result of glm for explanation, we would like to take all (numeric) variables to find the best performing one.
 
-```{r lime, echo=TRUE, warning=FALSE}
+```{r use_glm, echo=TRUE, warning=FALSE}
 
-df_merged$class <- as.numeric(df_merged[outcome] == TRUE)
+dTrain$class <- as.numeric(dTrain[outcome] == TRUE)
+dTest$class <- as.numeric(dTest[outcome] == TRUE)
+dCal$class <- as.numeric(dCal[outcome] == TRUE)
 pos <- 1
 
 set.seed(12345)
-intrain <- runif(nrow(df_merged)) < 0.75
-
-train <- df_merged[intrain, ]
-test <- df_merged[!intrain, ]
-
-cat("Training set size is ", dim(train), " and test set size is ", dim(test))
 
 # variables holding truth
-#responses <- colnames(df_merged) %in% c(outcome, "class")
-
-features <- ori_sel_colnames <- gsub("^pred\\.", "", selVars) # colnames(df_merged)[!responses]
+#responses <- colnames(dTrain) %in% c(outcome, "class")
+features <- numericVars[numericVars != 'Death.rate'] # colnames(dTrain)[!responses] # gsub("^pred\\.", "", selVars) 
 
 formula <- paste("class", paste(features, collapse=" + "), sep=" ~ ")
+# print(formula)
 
-model_logr <- glm(formula=formula, data=train, family=binomial(link="logit"))
+model_logr <- glm(formula=formula, data=dTrain, family=binomial(link="logit"))
 
-train$pred <- predict(model_logr, newdata=train, type="response")
-test$pred <- predict(model_logr, newdata=test, type="response")
-
+dTrain$pred <- predict(model_logr, newdata=dTrain, type="response")
+dTest$pred <- predict(model_logr, newdata=dTest, type="response")
+dCal$pred <- predict(model_logr, newdata=dCal, type="response")
 
 # ytrue should be a vector containing 1s (or TRUE) and 0s (or FALSE);
 # ypred should be a vector containing the predicted probability values for the target class.
@@ -958,25 +955,78 @@ confusion_matrix <- function(ytrue, ypred, threshold=0.5) {
   cmat
 }
 
-cases <- sample(nrow(test), size = 6)
-print(test[cases, c("class","pred")])
+cases <- sample(nrow(dTest), size = 4)
+print(dTest[cases, c("class","pred")])
 
-cm <- confusion_matrix(test$class, test$pred)
+cm <- confusion_matrix(dTest$class, dTest$pred)
 print(cm)
-# all feature vars
-##       predicted
-## actual FALSE TRUE
-##      0   719   26
-##      1    37  708
 
-pm <- performanceMeasures(test$class, test$pred, 'Logit')
-print(pm)
-# all feature vars
-##   model precision    recall        f1 dev.norm
-## 1 model 0.9645777 0.9503356 0.9574037      Inf
+print(performanceMeasures(dTest$class, dTest$pred, 'Logit Test'))
+print(performanceMeasures(dCal$class, dCal$pred, 'Logit Calibration'))
 
-# print(summary(model_logr))
+cat('AUC of dTrain in logit: ', calcAUC(predict(model_logr, newdata=dTrain), dTrain[,outcome]))
+cat('AUC of dTest in logit: ', calcAUC(predict(model_logr, newdata=dTest), dTest[,outcome]))
+cat('AUC of dCal in logit: ', calcAUC(predict(model_logr, newdata=dCal), dCal[,outcome]))
+```
+Notice that based on all numeric variables, glm gives AUC values of 0.89 - 0.90. This is much higher than the AUC values (around 0.81) of selected variables with Decision Tree Model. This is a confirmation that logistic regression model is the go-to classifier when predicting binary outcome, which is our case here. 
 
+Now we are curious which numeric variable actually contributes the most to this higher performance. We will create an explainer with the help of LIME and XGBoost below.
+
+```{r lime, echo=TRUE}
+
+# Input:
+# - variable_matrix: matrix of input data
+# - labelvec: numeric vector of class labels (1 is positive class)
+#
+# Returns:
+# - xgboost modelR
+fit_mortality_example = function(variable_matrix, labelvec) {
+  cv <- xgb.cv(variable_matrix, label = labelvec,
+               params=list(
+                 objective="binary:logistic"
+               ),
+               nfold=5,
+               nrounds=100,
+               print_every_n=10,
+               metrics="logloss")
+  
+  evalframe <- as.data.frame(cv$evaluation_log)
+  NROUNDS <- which.min(evalframe$test_logloss_mean)
+  
+  model <- xgboost(data=variable_matrix, label=labelvec,
+                   params=list(
+                     objective="binary:logistic"
+                   ),
+                   nrounds=NROUNDS,
+                   verbose=FALSE)
+  
+  model
+}
+
+# Fit the mortality dataset using xgboost:
+input <- as.matrix(dTrain[features])
+model <- fit_mortality_example(input, dTrain$class)
+
+
+explainer <- lime(dTrain[features], model = model, 
+                  bin_continuous = TRUE, n_bins = 10)
+
+example <- dTest[cases,features]
+
+
+explanation1 <- lime::explain(example[1,], explainer, n_labels = 1, n_features = 4)
+print(plot_features(explanation1))
+
+explanation2 <- lime::explain(example[2,], explainer, n_labels = 1, n_features = 4)
+print(plot_features(explanation2))
+
+explanation3 <- lime::explain(example[3,], explainer, n_labels = 1, n_features = 4)
+print(plot_features(explanation3))
+
+explanation4 <- lime::explain(example[4,], explainer, n_labels = 1, n_features = 4)
+print(plot_features(explanation4))
 
 ```
+The explanation is exciting! The observations with the best fitting score (the last two) show total population as the most valuable feature variable for our prediction, especially when country's population is large (greater than 27 million). When the population is less than 4 million this variable becomes less important (still within the top 4) or even play a contradictory role to our prediction. This confirms our conclusion from previous sections that the larger the population the higher mortality rate will possibly be.
 
+On the other hand, low bone mineral density rate and low birth weight rate (how much percent the number of death from these causes cover in total mortality) seem unexpectedly useful to our prediction. We do not see the unsafe sanitation back. Dying from low mineral density and birth weight (requires the mothers to eat properly) may indicate that the food security is not guaranteed. Since food is a basic need for living, lack of food due to famine, war or poverty will likely cause the death rate to increase in a country/region. 
