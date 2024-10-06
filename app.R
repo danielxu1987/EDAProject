@@ -30,86 +30,100 @@ ui <- fluidPage(
   titlePanel("EDA Project single-multi variables"),
   
   # Sidebar with a slider input
-  sidebarLayout(
-    sidebarPanel(
-      selectInput("plot_type", "Select plot type:",
-        choices = c('hist_single',
-                    'box_single',
-                    'box_compare',
-                    'trend_compare',
-                    'bar_compare',
-                    "pairwise",
-                    "scatter",
-                    "geom_bin2d",
-                    "colorplot",
-                    "jitter",
-                    "hist_density",
-                    "stackedbar",
-                    "sidebysidebar",
-                    "filledbar",
-                    "overlayingbar"
-      )),
-      conditionalPanel(
-        condition = "input.plot_type == 'hist_single'",
-        selectInput(inputId = "year", label = "Choose year", choices = c('All', years)),
-        selectInput(inputId = "var", label = "Choose death cause", choices = num_vars)
-      ),
-      conditionalPanel(
-        condition = "input.plot_type == 'box_single'",
-        selectInput(inputId = "con", label = "Choose country", choices = c('All', countries)),
-        selectInput(inputId = "var", label = "Choose death cause", choices = num_vars)
-      ),
-      conditionalPanel(
-        condition = "input.plot_type == 'box_compare'",
-        selectInput(inputId = "var", 
-          label = "Choose death cause", choices = c('Unsafe.water.source', 'Unsafe.sanitation', 'No.access.to.handwashing.facility')),
-      ),
-      conditionalPanel(
-        condition = "input.plot_type == 'trend_compare'",
-        selectInput(inputId = "var", label = "Choose death cause", choices = num_vars),
-      ),
-      conditionalPanel(
-        condition = "input.plot_type == 'bar_compare'",
-        selectInput(inputId = "year", label = "Choose year", choices = unique(df$Year)),
-        selectInput(inputId = "var", label = "Choose death cause", choices = num_vars),
-      ),
-      conditionalPanel(
-        condition = "input.plot_type == 'pairwise'",
-        selectInput(inputId = "con", label = "Choose country", choices = countries),
-        
-        pickerInput(
-          inputId = "selected_attributes",
-          label = "Select attributes:",
-          choices = names(df[, -c(1:3)]),
-          multiple = TRUE,
-          options = list('actions-box' = TRUE)
+  tabsetPanel(
+    id = 'tabs',
+    
+    tabPanel("EDA",
+      sidebarLayout(
+        sidebarPanel(
+          selectInput("plot_type", "Select plot type:",
+            choices = c('hist_single',
+                        'box_single',
+                        'box_compare',
+                        'trend_compare',
+                        'bar_compare',
+                        "pairwise",
+                        "scatter",
+                        "geom_bin2d",
+                        "colorplot",
+                        "jitter",
+                        "hist_density",
+                        "stackedbar",
+                        "sidebysidebar",
+                        "filledbar",
+                        "overlayingbar"
+          )),
+          conditionalPanel(
+            condition = "input.plot_type == 'hist_single'",
+            selectInput(inputId = "year", label = "Choose year", choices = c('All', years)),
+            selectInput(inputId = "var", label = "Choose death cause", choices = num_vars)
+          ),
+          conditionalPanel(
+            condition = "input.plot_type == 'box_single'",
+            selectInput(inputId = "con", label = "Choose country", choices = c('All', countries)),
+            selectInput(inputId = "var", label = "Choose death cause", choices = num_vars)
+          ),
+          conditionalPanel(
+            condition = "input.plot_type == 'box_compare'",
+            selectInput(inputId = "var", 
+              label = "Choose death cause", choices = c('Unsafe.water.source', 'Unsafe.sanitation', 'No.access.to.handwashing.facility')),
+          ),
+          conditionalPanel(
+            condition = "input.plot_type == 'trend_compare'",
+            selectInput(inputId = "var", label = "Choose death cause", choices = num_vars),
+          ),
+          conditionalPanel(
+            condition = "input.plot_type == 'bar_compare'",
+            selectInput(inputId = "year", label = "Choose year", choices = unique(df$Year)),
+            selectInput(inputId = "var", label = "Choose death cause", choices = num_vars),
+          ),
+          conditionalPanel(
+            condition = "input.plot_type == 'pairwise'",
+            selectInput(inputId = "con", label = "Choose country", choices = countries),
+            
+            pickerInput(
+              inputId = "selected_attributes",
+              label = "Select attributes:",
+              choices = names(df[, -c(1:3)]),
+              multiple = TRUE,
+              options = list('actions-box' = TRUE)
+            )
+          ),
+          conditionalPanel(
+            condition = "input.plot_type == 'scatter'",
+            #selectInput(inputId = "con", label = "Choose country", choices = countries),
+            selectInput("x_attr", "Select x-axis attribute:", num_vars),
+            selectInput("y_attr", "Select y-axis attribute:", num_vars)
+          ),
+          conditionalPanel(
+            condition = "input.plot_type == 'geom_bin2d'",
+            #selectInput(inputId = "con", label = "Choose country", choices = countries),
+            selectInput("x_attr", "Select x-axis attribute:", num_vars),
+            selectInput("y_attr", "Select y-axis attribute:", num_vars),
+            sliderInput('alp', 'Transparency', min = 0.1, max = 1.0, value = 0.35)
+          )
+        ),
+        mainPanel(
+          plotOutput("plot", height = '600px', width = '1000px')
         )
-      ),
-      conditionalPanel(
-        condition = "input.plot_type == 'scatter'",
-        #selectInput(inputId = "con", label = "Choose country", choices = countries),
-        selectInput("x_attr", "Select x-axis attribute:", num_vars),
-        selectInput("y_attr", "Select y-axis attribute:", num_vars)
-      ),
-      conditionalPanel(
-        condition = "input.plot_type == 'geom_bin2d'",
-        #selectInput(inputId = "con", label = "Choose country", choices = countries),
-        selectInput("x_attr", "Select x-axis attribute:", num_vars),
-        selectInput("y_attr", "Select y-axis attribute:", num_vars),
-        sliderInput('alp', 'Transparency', min = 0.1, max = 1.0, value = 0.35)
       )
     ),
-    
-    # Show a plot of the generated distribution
-    mainPanel(
-      plotOutput("plot", height = '600px', width = '1000px')
+    tabPanel("ML",
+      sidebarLayout(
+       sidebarPanel(
+         selectInput("mlOption", "Select an option for ML:",
+                     choices = c("auc", "precision"))
+       ),
+       mainPanel(
+         plotOutput("mlplot", height = '400px', width = '600px')
+       )
+      )
     )
   )
 )
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
-  
   # in the server:
   output$plot <- renderPlot({
     if(input$plot_type == "hist_single"){
@@ -248,6 +262,17 @@ server <- function(input, output) {
       # to see ratios of one value over the other value
     }
   })
+  
+  output$mlplot <- renderPlot(
+    if (input$mlOption == "auc") {
+      plot(1:10, cumsum(runif(10)), type = "l", main = "Line Curve", 
+           xlab = "X-axis", ylab = "Cumulative Sum", col = "red")
+    } 
+    else if (input$mlOption == "precision") {
+      plot(1:10, runif(10, min = 0, max = 1), type = "l", main = "Precision Curve", 
+           xlab = "X-axis", ylab = "Precision", col = "blue")
+    }
+  )
 }
 
 
