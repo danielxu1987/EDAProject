@@ -12,19 +12,20 @@ library(ROCit)
 
 
 # load dataset
-df <- read.csv("./Countries and death causes.csv", header = T, sep=",")
+df_original <- read.csv("./Countries and death causes.csv", header = T, sep=",")
 
-dataUK <- df[df['Entity']=='United Kingdom',] #df[df['Entity']=='China',]
-dataTAN <- df[df['Entity']=='Tanzania',]
-dataNLD <- df[df['Entity']=='Netherlands',]
-dataCAM <- df[df['Entity']=='Cambodia',]
+colnames(df_original)[1] <- "Country"
 
-numericVars <- names(df[, -c(1:3)])
-countries <- unique(df$Entity)
+num_vars <- sort(names(df_original[, -c(1:3)]))
+countries <- unique(df_original$Country)
 years <- 1990:2019
+# remove regions groups without a valid Code
+df <- df_original[df_original$Code != '', ]
 
-colnames(df)[1] <- "Country"
-df <- df[df$Code != '', ]
+dataUK <- df[df['Country']=='United Kingdom',] #df[df['Country']=='China',]
+dataTAN <- df[df['Country']=='Tanzania',]
+dataNLD <- df[df['Country']=='Netherlands',]
+dataCAM <- df[df['Country']=='Cambodia',]
 
 
 # merge total population 
@@ -39,20 +40,19 @@ df_merged <- merge(df, popl_df, by.x = c("Code", "Year"), by.y = c("Country.Code
 df_merged <- df_merged[, c(1:3, ncol(df_merged)-1, ncol(df_merged), 4:(ncol(df_merged)-2))]
 
 nacount <- count_nas(df_merged)
-print(nacount)
-
 nas_df_merged <- df_merged[is.na(df_merged$total.population),]
-nas_df_merged[sample(nrow(nas_df_merged), 6), 1:5]
+# nas_df_merged[sample(nrow(nas_df_merged), 6), 1:5]
 
+# remove NA's in df_merged
 df_merged <- setdiff(df_merged, nas_df_merged)
 
 
 df_merged$Country <- as.factor(df_merged$Country)
 df_merged$Year <- as.factor(df_merged$Year)
 
-df_merged$total.mortality <- rowSums(df_merged[numericVars])
+df_merged$total.mortality <- rowSums(df_merged[num_vars])
 
-for (col in numericVars) {
+for (col in num_vars) {
   df_merged[paste0(col, ".rate")] <- df_merged[col] / df_merged['total.mortality']
 }
 
@@ -424,7 +424,75 @@ for (k in kvalues) {
 # grid.arrange(fig2, fig5, fig6, fig8, nrow=2)
 
 
+## Clustering
 
+dTrain$class <- as.numeric(dTrain[outcome] == TRUE)
+dTest$class <- as.numeric(dTest[outcome] == TRUE)
+dCal$class <- as.numeric(dCal[outcome] == TRUE)
+pos <- 1
+
+set.seed(12345)
+
+# variables holding truth
+#responses <- colnames(dTrain) %in% c(outcome, "class")
+features <- numericVars[numericVars != 'Death.rate'] # colnames(dTrain)[!responses] # gsub("^pred\\.", "", selVars) 
+
+formula <- paste("class", paste(features, collapse=" + "), sep=" ~ ")
+# print(formula)
+
+model_logr <- glm(formula=formula, data=dTrain, family=binomial(link="logit"))
+
+dTrain$pred <- predict(model_logr, newdata=dTrain, type="response")
+dTest$pred <- predict(model_logr, newdata=dTest, type="response")
+dCal$pred <- predict(model_logr, newdata=dCal, type="response")
+
+# ytrue should be a vector containing 1s (or TRUE) and 0s (or FALSE);
+# ypred should be a vector containing the predicted probability values for the target class.
+# Both ytrue and ypred should have the same length.
+performanceMeasures <- function(ytrue, ypred, model.name = "model", threshold=0.5) {
+  # compute the normalised deviance
+  dev.norm <- -2 * logLikelihood(ytrue, ypred)/length(ypred)
+  cmat <- table(actual = ytrue, predicted = ypred >= threshold)
+  accuracy <- sum(diag(cmat)) / sum(cmat)
+  precision <- cmat[2, 2] / sum(cmat[, 2])
+  recall <- cmat[2, 2] / sum(cmat[2, ])
+  f1 <- 2 * precision * recall / (precision + recall)
+  data.frame(model = model.name, precision = precision, recall = recall, 
+             f1 = f1, dev.norm = dev.norm)
+}
+
+fit_mortality_example = function(variable_matrix, labelvec) {
+  cv <- xgb.cv(variable_matrix, label = labelvec,
+               params=list(
+                 objective="binary:logistic"
+               ),
+               nfold=5,
+               nrounds=100,
+               print_every_n=10,
+               metrics="logloss")
+  
+  evalframe <- as.data.frame(cv$evaluation_log)
+  NROUNDS <- which.min(evalframe$test_logloss_mean)
+  
+  model <- xgboost(data=variable_matrix, label=labelvec,
+                   params=list(
+                     objective="binary:logistic"
+                   ),
+                   nrounds=NROUNDS,
+                   verbose=FALSE)
+  model
+}
+
+# Fit the mortality dataset using xgboost:
+input <- as.matrix(dTrain[features])
+model <- fit_mortality_example(input, dTrain$class)
+
+explainer <- lime(dTrain[features], model = model, 
+                  bin_continuous = TRUE, n_bins = 10)
+
+example <- dTest[cases,features]
+
+explanation <- lime::explain(example, explainer, n_labels = 1, n_features = 4)
 
 
 # ------------- GUI -------------
@@ -462,26 +530,26 @@ ui <- fluidPage(
                  conditionalPanel(
                    condition = "input.plot_type == 'hist_single'",
                    selectInput(inputId = "year", label = "Choose year", choices = c('All', years)),
-                   selectInput(inputId = "var", label = "Choose death cause", choices = numericVars)
+                   selectInput(inputId = "var", label = "Choose death cause", choices = num_vars)
                  ),
                  conditionalPanel(
                    condition = "input.plot_type == 'box_single'",
-                   selectInput(inputId = "con", label = "Choose country", choices = c('All', countries)),
-                   selectInput(inputId = "var", label = "Choose death cause", choices = numericVars)
+                   selectInput(inputId = "con", label = "Choose country", choices = c('All', countries), selected = 'All'),
+                   selectInput(inputId = "var", label = "Choose death cause", choices = num_vars)
                  ),
                  conditionalPanel(
                    condition = "input.plot_type == 'box_compare'",
                    selectInput(inputId = "var", 
-                               label = "Choose death cause", choices = c('Unsafe.water.source', 'Unsafe.sanitation', 'No.access.to.handwashing.facility')),
+                               label = "Choose death cause", choices = num_vars)#c('Unsafe.water.source', 'Unsafe.sanitation', 'No.access.to.handwashing.facility')),
                  ),
                  conditionalPanel(
                    condition = "input.plot_type == 'trend_compare'",
-                   selectInput(inputId = "var", label = "Choose death cause", choices = numericVars),
+                   selectInput(inputId = "var", label = "Choose death cause", choices = num_vars),
                  ),
                  conditionalPanel(
                    condition = "input.plot_type == 'bar_compare'",
                    selectInput(inputId = "year", label = "Choose year", choices = unique(df$Year)),
-                   selectInput(inputId = "var", label = "Choose death cause", choices = numericVars),
+                   selectInput(inputId = "var", label = "Choose death cause", choices = num_vars, selected = 'Drug.use'),
                  ),
                  conditionalPanel(
                    condition = "input.plot_type == 'pairwise'",
@@ -490,7 +558,7 @@ ui <- fluidPage(
                    pickerInput(
                      inputId = "selected_attributes",
                      label = "Select attributes:",
-                     choices = names(df[, -c(1:3)]),
+                     choices = num_vars,
                      multiple = TRUE,
                      options = list('actions-box' = TRUE)
                    )
@@ -498,14 +566,14 @@ ui <- fluidPage(
                  conditionalPanel(
                    condition = "input.plot_type == 'scatter'",
                    #selectInput(inputId = "con", label = "Choose country", choices = countries),
-                   selectInput("x_attr", "Select x-axis attribute:", numericVars),
-                   selectInput("y_attr", "Select y-axis attribute:", numericVars)
+                   selectInput("x_attr", "Select x-axis attribute:", num_vars),
+                   selectInput("y_attr", "Select y-axis attribute:", num_vars)
                  ),
                  conditionalPanel(
                    condition = "input.plot_type == 'geom_bin2d'",
                    #selectInput(inputId = "con", label = "Choose country", choices = countries),
-                   selectInput("x_attr", "Select x-axis attribute:", numericVars),
-                   selectInput("y_attr", "Select y-axis attribute:", numericVars),
+                   selectInput("x_attr", "Select x-axis attribute:", num_vars),
+                   selectInput("y_attr", "Select y-axis attribute:", num_vars),
                    sliderInput('alp', 'Transparency', min = 0.1, max = 1.0, value = 0.35)
                  )
                ),
@@ -517,29 +585,21 @@ ui <- fluidPage(
     tabPanel("ML",
              sidebarLayout(
                sidebarPanel(
-                 # contribution death causes - stack boxplots
-                 # derived cat vars ROC plot
-                 # top num vars ROC plot
-                 # double density plot
-                 # hclust k = 5
-                 # hclust k = 2 or merge these two
-                 # hclust PCA k=5
-                 # hclust CH index and WSS
-                 # hclust k = 8
-                 # kmeans CH index vs ASW
-                 # clustering k =2, 5, 6, 8
-                 # LIME explainer plot
                  selectInput("mlOption", "Select an option for ML:",
                              choices = c('Contribution death causes',
                                          'ROC plot categorical vars',
                                          'ROC plot selNumVars',
                                          'Double Density plot',
-                                         'Hierarchical Cluster k=5',
+                                         'Hierarchical Cluster',
                                          'Hclust assessment',
-                                         'Hierarchical Cluster k=8',
                                          'Kmeans clust assessment',
                                          'PCA clusters',
-                                         'LIME explainer plot'))
+                                         'LIME explainer plot')),
+                 conditionalPanel(
+                   condition = "input.mlOption == 'Hierarchical Cluster'",
+                   sliderInput('kvalue', 'K value', min = 2, max = 10, value = 2, step = 1)
+                   # selectInput(inputId = "kvalue", label = "Choose K", choices = 2:10)
+                 ),
                ),
                mainPanel(
                  plotOutput("mlplot", height = '600px', width = '900px')
@@ -557,9 +617,9 @@ server <- function(input, output) {
       data <- data.frame()
       
       if(input$year == 'All')
-        data <- df
+        data <- df_original
       else
-        data <- df[df['Year']==input$year,] 
+        data <- df_original[df_original['Year']==input$year,] 
       
       ggplot(data) +
         geom_histogram(aes_string(x = input$var), bins = 40, fill = "gray") +
@@ -569,9 +629,9 @@ server <- function(input, output) {
       data <- data.frame()
       
       if(input$con == 'All')
-        data <- df
+        data <- df_original
       else
-        data <- df[df['Entity']==input$con,] 
+        data <- df_original[df_original['Country']==input$con,] 
       
       boxplot(data[input$var], xlab=input$var, ylab = 'Count')
     }
@@ -608,16 +668,16 @@ server <- function(input, output) {
       grid.arrange(p1, p2, p3, p4, nrow=2)
     }
     else if(input$plot_type == 'bar_compare'){
-      df_year <- df[df$Year==input$year,]
-      sam_year <- df_year[sample(nrow(df_year), 20), ]
+      df_original_year <- df_original[df_original$Year==input$year,]
+      sam_year <- df_original_year[sample(nrow(df_original_year), 20), ]
       # sel_var <- input$var
-      rr_trans <- transform(sam_year, Entity = reorder(Entity, Drug.use))
-      ggplot(rr_trans, aes(x = Entity, y = Drug.use)) +
+      rr_trans <- transform(sam_year, Country = reorder(Country, Drug.use))
+      ggplot(rr_trans, aes(x = Country, y = Drug.use)) +
         geom_bar(stat = "identity", fill = 'red') + 
         coord_flip()
     }
     else if (input$plot_type == "pairwise") {
-      data <- df[df['Entity']==input$con,]
+      data <- df_original[df_original['Country']==input$con,]
       selected_attrs <- input$selected_attributes
       if (length(selected_attrs) < 2) {
         return(NULL)
@@ -625,22 +685,23 @@ server <- function(input, output) {
       pairs(data[, selected_attrs], main = input$con)
     } 
     else if(input$plot_type == "scatter") {
-      #data <- df[df['Entity']==input$con,]
       x_attr <- input$x_attr
       y_attr <- input$y_attr
-      ggplot(df, aes_string(x = x_attr, y = y_attr)) +
+      ggplot(df_original, aes_string(x = x_attr, y = y_attr)) +
         geom_jitter(width=0.6, height=3, alpha=0.5) + 
         geom_smooth() +
-        xlim(1, 2500) +
-        ylim(1, 1000)
+        xlim(1, 3000) +
+        ylim(1, 7000)
     } 
     else if(input$plot_type == "geom_bin2d"){
-      #data <- df[df['Entity']==input$con,]
+      #data <- df_original[df_original['Country']==input$con,]
       x_attr <- input$x_attr
       y_attr <- input$y_attr
       alp <- input$alp
-      ggplot(df, aes_string(x=x_attr, y=y_attr) ) +
-        geom_bin2d(alpha=alp)
+      ggplot(df_original, aes_string(x=x_attr, y=y_attr) ) +
+        geom_bin2d(alpha=alp) +
+        xlim(1, 3000) +
+        ylim(1, 7000)
     }
   })
   
@@ -653,9 +714,9 @@ server <- function(input, output) {
       plot_roc(dCal[[selCatVars[2]]], dCal[,outcome], colour_id=3, overlaid=T) # Second variable is green
       plot_roc(dCal[[selCatVars[3]]], dCal[,outcome], colour_id=4, overlaid=T)
       text(x = 0.4, y = 0.8, 
-        label = paste('Unsafe.sex.over.median (red)', ' Smoking.over.median (green)',
-        "and Blood.pressure.over.median (blue) are overlapping", 
-        sep='\n')
+           label = paste('Unsafe.sex.over.median (red)', ' Smoking.over.median (green)',
+                         "and Blood.pressure.over.median (blue) are overlapping", 
+                         sep='\n')
       )
     }
     else if (input$mlOption == "ROC plot selNumVars") {
@@ -669,10 +730,11 @@ server <- function(input, output) {
       fig2 <- ggplot(dCal) + geom_density(aes(x=pred.Unsafe.sanitation, color=as.factor(Death.rate.high)))
       grid.arrange(fig1, fig2, ncol=1)
     }
-    else if (input$mlOption == "Hierarchical Cluster k=5"){
+    else if (input$mlOption == "Hierarchical Cluster"){
       # To examine `pfit`, type: summary(pfit) and pfit$height
       plot(pfit, labels=clusterSet$Country, main="Dendrogram for Diet Related Causes")
-      rect.hclust(pfit, k=5) # k=5 means we want rectangles to be put around 5 clusters
+      kvalue <- as.numeric(input$kvalue)
+      rect.hclust(pfit, k=kvalue) # k=5 means we want rectangles to be put around 5 clusters
       xx <- c(1, 7, 12, 19, 22)
       yy <- -4.5
       clusterID <- c(2,3,1,5,4)
@@ -681,10 +743,6 @@ server <- function(input, output) {
     else if (input$mlOption == "Hclust assessment"){
       grid.arrange(figCH, figWSS, nrow=1)
     }
-    else if (input$mlOption == "Hierarchical Cluster k=8"){
-      plot(pfit, labels=clusterSet$Country, main="Dendrogram for Diet Related Deaths")
-      rect.hclust(pfit, k=8)
-    }
     else if (input$mlOption == "Kmeans clust assessment"){
       grid.arrange(figCHKmean, figASWKmean, nrow=1)
     }
@@ -692,7 +750,7 @@ server <- function(input, output) {
       grid.arrange(fig2, fig5, fig6, fig8, nrow=2)
     }
     else if (input$mlOption == "LIME explainer plot"){
-      
+      plot_features(explanation)
     }
   )
 }
