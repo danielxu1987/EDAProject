@@ -302,6 +302,127 @@ fig_hclust <- ggplot(hclust.project2D, aes(x=PC1, y=PC2)) +
   geom_polygon(data=hclust.hull, aes(group=cluster, fill=as.factor(cluster)),
                alpha=0.4, linetype=0) + theme(text=element_text(size=20))
 
+sqr_euDist <- function(x, y) {
+  sum((x - y)^2)
+}
+
+# Function to calculate WSS of a cluster, represented as a n-by-d matrix
+# (where n and d are the numbers of rows and columns of the matrix)
+# which contains only points of the cluster.
+wss <- function(clustermat) {
+  c0 <- colMeans(clustermat)
+  sum(apply( clustermat, 1, FUN=function(row) {sqr_euDist(row, c0)} ))
+}
+
+# Function to calculate the total WSS. Argument `scaled_df`: data frame
+# with normalised numerical columns. Argument `labels`: vector containing
+# the cluster ID (starting at 1) for each row of the data frame.
+wss_total <- function(scaled_df, labels) {
+  wss.sum <- 0
+  k <- length(unique(labels))
+  for (i in 1:k)
+    wss.sum <- wss.sum + wss(subset(scaled_df, labels == i))
+  wss.sum
+}
+
+# Function to calculate total sum of squared (TSS) distance of data
+# points about the (global) mean. This is the same as WSS when the
+# number of clusters (k) is 1.
+tss <- function(scaled_df) {
+  wss(scaled_df)
+}
+# Function to return the CH indices computed using hierarchical
+# clustering (function `hclust`) or k-means clustering (`kmeans`)
+# for a vector of k values ranging from 1 to kmax.
+CH_index <- function(scaled_df, kmax, method="kmeans") {
+  if (!(method %in% c("kmeans", "hclust")))
+    stop("method must be one of c('kmeans', 'hclust')")
+  npts <- nrow(scaled_df)
+  wss.value <- numeric(kmax) # create a vector of numeric type
+  # wss.value[1] stores the WSS value for k=1 (when all the
+  # data points form 1 large cluster).
+  wss.value[1] <- wss(scaled_df)
+  if (method == "kmeans") {
+    # kmeans
+    for (k in 2:kmax) {
+      clustering <- kmeans(scaled_df, k, nstart=10, iter.max=100)
+      wss.value[k] <- clustering$tot.withinss
+    }
+  } else {
+    # hclust
+    d <- dist(scaled_df, method="euclidean")
+    pfit <- hclust(d, method="ward.D2")
+    for (k in 2:kmax) {
+      labels <- cutree(pfit, k=k)
+      wss.value[k] <- wss_total(scaled_df, labels)
+    }
+  }
+  bss.value <- tss(scaled_df) - wss.value # this is a vector
+  B <- bss.value / (0:(kmax-1)) # also a vector
+  W <- wss.value / (npts - 1:kmax) # also a vector
+  data.frame(k = 1:kmax, CH_index = B/W, WSS = wss.value)
+}
+
+# calculate the CH criterion
+crit.df <- CH_index(scaled_df, 10, method="hclust")
+
+figCH <- ggplot(crit.df, aes(x=k, y=CH_index)) +
+  geom_point() + geom_line(colour="red") +
+  scale_x_continuous(breaks=1:10, labels=1:10) +
+  labs(y="CH index") + theme(text=element_text(size=20))
+figWSS <- ggplot(crit.df, aes(x=k, y=WSS), color="blue") +
+  geom_point() + geom_line(colour="blue") +
+  scale_x_continuous(breaks=1:10, labels=1:10) +
+  theme(text=element_text(size=20))
+
+# grid.arrange(figCH, figWSS, nrow=1)
+
+kbest.p <- 5
+# run kmeans with 5 clusters, 100 random starts, and 100
+# maximum iterations per run.
+kmClusters <- kmeans(scaled_df, kbest.p, nstart=100, iter.max=100)
+
+kmClustering.ch <- kmeansruns(scaled_df, krange=1:10, criterion="ch")
+
+kmClustering.asw <- kmeansruns(scaled_df, krange=1:10, criterion="asw")
+
+hclusting <- CH_index(scaled_df, 10, method="hclust")
+cat("CH index from hclust for k=1 to 10:/n", hclusting$CH_index)
+
+kmCritframe <- data.frame(k=1:10, ch=kmClustering.ch$crit,
+                          asw=kmClustering.asw$crit)
+
+figCHKmean <- ggplot(kmCritframe, aes(x=k, y=ch)) +
+  geom_point() + geom_line(colour="red") +
+  scale_x_continuous(breaks=1:10, labels=1:10) +
+  labs(y="CH index") + theme(text=element_text(size=20))
+
+figASWKmean <- ggplot(kmCritframe, aes(x=k, y=asw)) +
+  geom_point() + geom_line(colour="blue") +
+  scale_x_continuous(breaks=1:10, labels=1:10) +
+  labs(y="ASW") + theme(text=element_text(size=20))
+
+# grid.arrange(figCHKmean, figASWKmean, nrow=1)
+
+fig <- c()
+kvalues <- c(2,5,6,8)
+for (k in kvalues) {
+  groups <- kmeans(scaled_df, k, nstart=100, iter.max=100)$cluster
+  kmclust.project2D <- cbind(project2D, cluster=as.factor(groups),
+                             country=df$Country)
+  kmclust.hull <- find_convex_hull(kmclust.project2D, groups)
+  assign(paste0("fig", k),
+         ggplot(kmclust.project2D, aes(x=PC1, y=PC2)) +
+           geom_point(aes(shape=cluster, color=cluster)) +
+           geom_polygon(data=kmclust.hull, aes(group=cluster, fill=cluster),
+                        alpha=0.4, linetype=0) +
+           labs(title = sprintf("k = %d", k)) +
+           theme(legend.position="none", text=element_text(size=20))
+  )
+}
+
+# grid.arrange(fig2, fig5, fig6, fig8, nrow=2)
+
 
 
 
@@ -414,11 +535,10 @@ ui <- fluidPage(
                                          'ROC plot selNumVars',
                                          'Double Density plot',
                                          'Hierarchical Cluster k=5',
-                                         'PCA cluster',
                                          'Hclust assessment',
                                          'Hierarchical Cluster k=8',
                                          'Kmeans clust assessment',
-                                         'Clustering ks',
+                                         'PCA clusters',
                                          'LIME explainer plot'))
                ),
                mainPanel(
@@ -558,20 +678,18 @@ server <- function(input, output) {
       clusterID <- c(2,3,1,5,4)
       text(xx, yy, clusterID, col="red")
     }
-    else if (input$mlOption == "PCA cluster"){
-      fig_hclust
-    }
     else if (input$mlOption == "Hclust assessment"){
-      
+      grid.arrange(figCH, figWSS, nrow=1)
     }
     else if (input$mlOption == "Hierarchical Cluster k=8"){
-    
+      plot(pfit, labels=clusterSet$Country, main="Dendrogram for Diet Related Deaths")
+      rect.hclust(pfit, k=8)
     }
     else if (input$mlOption == "Kmeans clust assessment"){
-      
+      grid.arrange(figCHKmean, figASWKmean, nrow=1)
     }
-    else if (input$mlOption == "Clustering ks"){
-      
+    else if (input$mlOption == "PCA clusters"){
+      grid.arrange(fig2, fig5, fig6, fig8, nrow=2)
     }
     else if (input$mlOption == "LIME explainer plot"){
       
