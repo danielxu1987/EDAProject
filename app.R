@@ -9,7 +9,13 @@ library(gridExtra)
 library(knitr)
 library(reshape2)
 library(ROCit)
+library(tidyverse)
 
+library(dplyr)
+library(fpc)
+library('grDevices')
+library(xgboost)
+library(lime)
 
 # load dataset
 df_original <- read.csv("./Countries and death causes.csv", header = T, sep=",")
@@ -50,10 +56,10 @@ df_merged <- setdiff(df_merged, nas_df_merged)
 df_merged$Country <- as.factor(df_merged$Country)
 df_merged$Year <- as.factor(df_merged$Year)
 
-df_merged$total.mortality <- rowSums(df_merged[num_vars])
+df_merged$total.mortality <- rowSums(data.frame(df_merged[num_vars]))
 
 for (col in num_vars) {
-  df_merged[paste0(col, ".rate")] <- df_merged[col] / df_merged['total.mortality']
+  df_merged[[paste0(col, ".rate")]] <- df_merged[[col]] / df_merged$total.mortality
 }
 
 rateVars <- grep("\\.rate$", names(df_merged), value = TRUE)
@@ -404,22 +410,22 @@ figASWKmean <- ggplot(kmCritframe, aes(x=k, y=asw)) +
 
 # grid.arrange(figCHKmean, figASWKmean, nrow=1)
 
-fig <- c()
-kvalues <- c(2,5,6,8)
-for (k in kvalues) {
-  groups <- kmeans(scaled_df, k, nstart=100, iter.max=100)$cluster
-  kmclust.project2D <- cbind(project2D, cluster=as.factor(groups),
-                             country=df$Country)
-  kmclust.hull <- find_convex_hull(kmclust.project2D, groups)
-  assign(paste0("fig", k),
-         ggplot(kmclust.project2D, aes(x=PC1, y=PC2)) +
-           geom_point(aes(shape=cluster, color=cluster)) +
-           geom_polygon(data=kmclust.hull, aes(group=cluster, fill=cluster),
-                        alpha=0.4, linetype=0) +
-           labs(title = sprintf("k = %d", k)) +
-           theme(legend.position="none", text=element_text(size=20))
-  )
-}
+# fig <- c()
+# kvalues <- c(2,5,6,8)
+# for (k in kvalues) {
+#   groups <- kmeans(scaled_df, k, nstart=100, iter.max=100)$cluster
+#   kmclust.project2D <- cbind(project2D, cluster=as.factor(groups),
+#                              country=df$Country)
+#   kmclust.hull <- find_convex_hull(kmclust.project2D, groups)
+#   assign(paste0("fig", k),
+#          ggplot(kmclust.project2D, aes(x=PC1, y=PC2)) +
+#            geom_point(aes(shape=cluster, color=cluster)) +
+#            geom_polygon(data=kmclust.hull, aes(group=cluster, fill=cluster),
+#                         alpha=0.4, linetype=0) +
+#            labs(title = sprintf("k = %d", k)) +
+#            theme(legend.position="none", text=element_text(size=20))
+#   )
+# }
 
 # grid.arrange(fig2, fig5, fig6, fig8, nrow=2)
 
@@ -461,6 +467,8 @@ performanceMeasures <- function(ytrue, ypred, model.name = "model", threshold=0.
              f1 = f1, dev.norm = dev.norm)
 }
 
+cases <- sample(nrow(dTest), size = 4)
+
 fit_mortality_example = function(variable_matrix, labelvec) {
   cv <- xgb.cv(variable_matrix, label = labelvec,
                params=list(
@@ -490,9 +498,10 @@ model <- fit_mortality_example(input, dTrain$class)
 explainer <- lime(dTrain[features], model = model, 
                   bin_continuous = TRUE, n_bins = 10)
 
-example <- dTest[cases,features]
-
-explanation <- lime::explain(example, explainer, n_labels = 1, n_features = 4)
+# cases <- sample(nrow(dTest), size = 4)
+# example <- dTest[cases,features]
+# 
+# explanation <- lime::explain(example, explainer, n_labels = 1, n_features = 4)
 
 
 # ------------- GUI -------------
@@ -534,7 +543,7 @@ ui <- fluidPage(
                  ),
                  conditionalPanel(
                    condition = "input.plot_type == 'box_single'",
-                   selectInput(inputId = "con", label = "Choose country", choices = c('All', countries), selected = 'All'),
+                   selectInput(inputId = "con", label = "Choose country", choices = c(countries, 'All')),
                    selectInput(inputId = "var", label = "Choose death cause", choices = num_vars)
                  ),
                  conditionalPanel(
@@ -598,7 +607,14 @@ ui <- fluidPage(
                  conditionalPanel(
                    condition = "input.mlOption == 'Hierarchical Cluster'",
                    sliderInput('kvalue', 'K value', min = 2, max = 10, value = 2, step = 1)
-                   # selectInput(inputId = "kvalue", label = "Choose K", choices = 2:10)
+                 ),
+                 conditionalPanel(
+                   condition = "input.mlOption == 'PCA clusters'",
+                   sliderInput('kvalue', 'K value', min = 2, max = 10, value = 5, step = 1)
+                 ),
+                 conditionalPanel(
+                   condition = "input.mlOption == 'LIME explainer plot'",
+                   sliderInput('nfeat', 'Number of features', min = 2, max = 8, value = 4, step = 1)
                  ),
                ),
                mainPanel(
@@ -669,8 +685,9 @@ server <- function(input, output) {
     }
     else if(input$plot_type == 'bar_compare'){
       df_original_year <- df_original[df_original$Year==input$year,]
+      set.seed(45678)
       sam_year <- df_original_year[sample(nrow(df_original_year), 20), ]
-      # sel_var <- input$var
+      
       rr_trans <- transform(sam_year, Country = reorder(Country, Drug.use))
       ggplot(rr_trans, aes(x = Country, y = Drug.use)) +
         geom_bar(stat = "identity", fill = 'red') + 
@@ -747,9 +764,27 @@ server <- function(input, output) {
       grid.arrange(figCHKmean, figASWKmean, nrow=1)
     }
     else if (input$mlOption == "PCA clusters"){
-      grid.arrange(fig2, fig5, fig6, fig8, nrow=2)
+      k <- as.numeric(input$kvalue)
+      
+      groups <- kmeans(scaled_df, k, nstart=100, iter.max=100)$cluster
+      kmclust.project2D <- cbind(project2D, cluster=as.factor(groups),
+                                 country=df$Country)
+      kmclust.hull <- find_convex_hull(kmclust.project2D, groups)
+      # assign(paste0("fig", k),
+      ggplot(kmclust.project2D, aes(x=PC1, y=PC2)) +
+        geom_point(aes(shape=cluster, color=cluster)) +
+        geom_polygon(data=kmclust.hull, aes(group=cluster, fill=cluster),
+                    alpha=0.4, linetype=0) +
+        labs(title = sprintf("k = %d", k)) +
+        theme(legend.position="none", text=element_text(size=20))
+      
     }
     else if (input$mlOption == "LIME explainer plot"){
+      
+      example <- dTest[cases,features]
+      explanation <- lime::explain(example, explainer,
+                                   n_labels = 1, n_features = input$nfeat)
+      
       plot_features(explanation)
     }
   )
