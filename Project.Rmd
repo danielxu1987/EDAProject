@@ -4,7 +4,7 @@ output:
   html_document: default
 ---
 
-This is the R Notebook for the project from Sifeng Xu, 24525844 for unit *CITS4009 Computation Data Analysis*. It demonstrates the process and findings of EDA based on the **Countries and Death Causes** dataset. 
+This is the R Notebook for the project from Sifeng (Daniel) Xu, student ID 24525844 for unit *CITS4009 Computation Data Analysis*. It demonstrates the process and findings of EDA and ML based on the **Countries and Death Causes** dataset. Link to the video demo of my shiny app: https://youtu.be/gEgNz4DDMIM. 
 
 ```{r setup, include=FALSE}
 # Load  libraries
@@ -229,7 +229,7 @@ nas_df_merged[sample(nrow(nas_df_merged), 6), 1:5]
 
 ```
 
-It appears that some islands and the total value of the whole world from the original death causes are also included which results in `r nacount` NA's in total population. This is only `r nacount/nrow(df_merged)*100`% of all dataset. Since we are only interested in studying individual countries it alright to drop them.
+It appears that some islands and *World* (containing total number for the whole world) are also included which results in `r nacount` NA's when integrating with total population. This is only `r nacount/nrow(df_merged)*100`% of all dataset. Since we are only interested in studying individual countries it is alright to drop them.
 
 ```{r drop_nas, echo=TRUE}
 
@@ -266,7 +266,7 @@ print(figRateAll)
 ```
 
 ### Single variable prediction
-It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see what causes high death rate to a country. The rate is high (True) is if it is over the median rate worldwide. This binary variable holds the ground truth to check against the prediction later. 
+It seems high blood pressure, smoking, high glucose rate and high BMI (obesity) are the top reasons to people's death. Now we would like to see what causes high death rate to a country. The rate is high (True) if it is over the median rate worldwide. This binary variable holds the ground truth to check against the prediction later. 
 
 Our hypothesis is that the higher percentage of the top death causes the more likely death rate will be high. So we will also derived binary values from *Unsafe.sex*, *High.blood.pressure* and *Smoking* to see if these death contribution is over their median values or not. 
 
@@ -379,9 +379,10 @@ print(selCatVars)
 plot_roc(dCal[[selCatVars[1]]], dCal[,outcome]) #First variable is red
 plot_roc(dCal[[selCatVars[2]]], dCal[,outcome], colour_id=3, overlaid=T) # Second variable is green
 plot_roc(dCal[[selCatVars[3]]], dCal[,outcome], colour_id=4, overlaid=T)
+text(x = 0.4, y = 0.8, label = paste('Unsafe.sex.over.median (red)', 'Smoking.over.median (green)', "and Blood.pressure.over.median (blue) are overlapping", sep='\n'))
 ```
 
-Their AUC values are not higher than the null model. This is the confirmation to their performance in log likelihood and deviance reduction.
+Their AUC values are not higher than the null model. This is the confirmation to their poor performance in log likelihood and deviance reduction.
 
 Now we are going to see if numerical variables can do better. We will use all num vars for prediction of `r outcome`.
 
@@ -483,10 +484,12 @@ After inspecting the selected variables a bit more, it seems `r original_vars[1]
 # colour_id 1-7 are: black,red,green,blue,cyan,purple,gold
 plot_roc(dCal$pred.total.population, dCal[,outcome], colour_id=3) # population is green
 plot_roc(dCal$pred.Unsafe.sanitation, dCal[,outcome], colour_id=4, overlaid=T) #  sanitation is blue
+text(x = 0.4, y = 0.6, 'Total population', col = 'green', cex= 1.5)
+text(x = 0.4, y = 0.3, 'Unsafe sanitation', col = 'blue', cex = 1.5)
 
 ```
 
-It is clear that total population (green) covers a larger area. Let us check the double density plot before drawing conclusion on which numerical variable does the best.
+It is clear that total population covers a larger area. Let us check the double density plot before drawing conclusion on which numerical variable does the best.
 
 ```{r double_density_cat, echo=TRUE}
 
@@ -504,11 +507,11 @@ In contrast, the peaks of `r selNumVars[2]` for True/False are only marginally s
 
 ### Conclusion single variable selection
 
-Both `r selNumVars[1]` and `r selNumVars[2]` seem to give reasonable predictions, only that one would perform better than the other depending on the measurement. To be honest, the `r selNumVars[2]` was not expected to be helpful in our prediction in the beginning. Also, three binary variables derived from the big contributors to people's deaths, which we expected to be strongly correlated with our outcome variable, do not stand out in this selection process. 
+Both `r selNumVars[1]` and `r selNumVars[2]` seem to give reasonable predictions, only that one would perform better than the other depending on the measurement. To be honest, the `r selNumVars[2]` was not expected to be helpful in our prediction in the beginning. Also, three binary variables derived from the big contributors to people's deaths, which we expected to be more helpful in predicting our outcome variable, do not stand out in this selection process. 
 
-Our interpretation is that the higher the population the higher death rate will likely be. This may reflect the fact that developing countries usually have larger population than highly developed countries, where standards of living is higher and people theretend to live longer. 
+Our interpretation is that the higher the population the higher death rate will likely be. This may reflect the fact that developing countries usually have larger population than highly developed countries, where standards of living is higher and death rate is lower. 
 
-Next to that, safe sanitation seems to be crucial. This is more about hand washing, clean environment and hygiene, which are among the very basic needs for living. If these basics are not met, then many other things can go wrong which can put people's health and life at risk. 
+Next to that, safe sanitation seems to be crucial. This is more about hand washing, clean environment and hygiene, which are among the very basic needs for living. If these basics are not met, then many other things can go wrong which can push up the death rate. 
 
 In addition, according to [WHO stats on 2019](https://ourworldindata.org/grapher/mortality-rate-attributable-to-wash#:~:text=Death%20rate%20attributed%20to%20unsafe,people%20of%20a%20given%20population), the higher death rate by unsafe water, sanitation and lack of hygiene comes mostly from developing countries in Africa, Asia and South America. 
 
@@ -565,13 +568,13 @@ selVars <- selNumVars #c(selCatVars, selNumVars[2])
 run_nbPred(outcome, selVars)
 
 ```
-In the single variable prediction `r selNumVars[1]` has AUC:
+Just to review, in the single variable prediction `r selNumVars[1]` had AUC:
 
 + 0.533 for training
 + 0.571 for calibration 
 + 0.529 for test. 
 
-`r selNumVars[2]` has AUC
+`r selNumVars[2]` had AUC
 
 + 0.558 for training, 
 + 0.545 for calibration 
@@ -643,7 +646,7 @@ Our interpretation is that the high death rate is also dependent on year and cou
 
 ## Clustering
 
-We would like to pick diet related death causes for exploration in this section. As the total number of countries (>200) is unreadable when visualising hierarchical structure in this report, we will only choose 30 of them. More specifically, we would like to focus on year 2000 which is the turn of the century. We will start with 5 clusters.
+We would like to pick diet related death causes for exploration in this section. As the total number of countries (>200) is unreadable when visualising hierarchical structure in this report, we will only choose 25 of them. More specifically, we would like to focus on year 2000 which is the turn of the century. We will start with 5 clusters.
 
 ```{r hier_cluster, echo=TRUE}
 set.seed(123)
@@ -730,6 +733,8 @@ fig_hclust <- ggplot(hclust.project2D, aes(x=PC1, y=PC2)) +
 print(fig_hclust)
 
 ```
+
+
 Notice group 1, 2 and 4 are quite separated from each other while 3 and 5 seems to be close or even intersecting each other. Probably $k=5$ is not the best option.
 
 Now it is time to use measurements to see if we can spot a better k. We will use within sum of squares (WSS), total sum of squares (TSS), between sum of squares (BSS) to calculate Calinski-Harabasz index (CH index) 
@@ -887,7 +892,7 @@ for (k in kvalues) {
 grid.arrange(fig2, fig5, fig6, fig8, nrow=2)
 ```
 
-Both CH index and average silhouette width (ASW) show a local maximum when $k=2$ and a highest value when $k=8$. This is in line with the observation from the hierarchical clustering. We can see in the visual comparison that clusters are farer apart from each other when $k=8$ than when k has other values.
+Both CH index and average silhouette width (ASW) show a local maximum when $k=2$ and a highest value when $k=8$. This is in line with the observation from the hierarchical clustering. We can see in the visual comparison that clusters are farer apart from each other when $k=8$ than when k has other values. Therefore in this round of kmeans clustering 8 is also the best k value.
 
 ### LIME evaluation 
 
@@ -1005,6 +1010,6 @@ print(plot_features(explanation4))
 
 ```
 
-The explanation is exciting! The observations with the best fitting score (the last two) show total population as the most valuable feature for our prediction, especially when country's population is large (greater than 27 million). When the population is less than 4 million this variable becomes less important (still within the top 4 features) or even play a contradictory role to our prediction. This confirms our conclusion from previous sections that the larger the population the higher mortality rate will possibly be.
+The explanation is exciting! The observations with the best fitting score (the last two) show **total population** as the most valuable feature for our prediction, especially when country's population is large (greater than 27 million). When the population is less than 4 million this variable becomes less important (still within the top 4 features) or even play a contradictory role to our prediction. This confirms our conclusion from previous sections that the larger the population the higher mortality rate will possibly be.
 
 On the other hand, low bone mineral density rate and low birth weight rate (how much percent the number of death from these causes cover in total mortality) seem unexpectedly useful to our prediction. We do not see the unsafe sanitation back though. Perhaps dying from low mineral density and birth weight (requires the mothers to eat properly) indicate that the food security is not guaranteed in certain regions. Since food is a bottom line for survival, if food supply is not stable many other problems will appear that cause higher death rates.
