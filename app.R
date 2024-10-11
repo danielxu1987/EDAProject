@@ -1,5 +1,6 @@
 # This is the shiny app to assist data exploration for EDA project in unit CITS4009
-# Made by Sifeng Xu, 24525844
+# Made by Sifeng Xu, 24525844 
+# Link to the video demo of my shiny app: https://youtu.be/gEgNz4DDMIM. 
 
 # Load  libraries
 library(shiny)

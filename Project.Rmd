@@ -4,7 +4,7 @@ output:
   html_document: default
 ---
 
-This is the R Notebook for the project from Sifeng (Daniel) Xu, student ID 24525844 for unit *CITS4009 Computation Data Analysis*. It demonstrates the process and findings of EDA and ML based on the **Countries and Death Causes** dataset. Link to the video demo of my shiny app: https://youtu.be/gEgNz4DDMIM. 
+This is the R Notebook for the project from Sifeng (Daniel) XU, student ID 24525844 for unit *CITS4009 Computation Data Analysis*. It demonstrates the process and findings of EDA and ML based on the **Countries and Death Causes** dataset. Link to the video demo of my shiny app: https://youtu.be/gEgNz4DDMIM. 
 
 ```{r setup, include=FALSE}
 # Load  libraries
@@ -141,7 +141,7 @@ On the other hand, outdoor air pollution appears to become less harmful in weste
 
 ### Bar chart
 
-Drug use seems to have serious impact in both rich and poor areas. In the figure below, far more people ended their life in India and the USA due to drug use than the whole African Region in 2010. European region is not much better as they ranked the third in this set of comparison worldwide. And the population of the whole EU was smaller than South-East Asia (top 1).
+Drug use seems to have serious impact in both rich and poor areas. In the figure below, far more people ended their life in India and the USA due to drug use than the whole African Region in 2010. European region is not much better as they ranked the third in this set of comparison worldwide.
 
 ![](./images/Bar_compare_us.JPG)
 
