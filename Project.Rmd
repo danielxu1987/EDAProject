@@ -175,7 +175,7 @@ print(sum(df_num < 0))
 print(sum(df_num == 0))
 ```
 
-Currently there is no NA's in the dataset, neither are there any negative values. So this dataset looks quite clearn. In addition, there are zero values, which may indicate that either no one died of that specific cause in a country in a specific year, or they are missing values. Although it is possible to treat zero's as NA's and replace them with e.g. median or mean, doing this will overwrite all the zero's which are truly reflecting zero mortality. Therefore, in this project we will keep zero's as-is.
+Currently there is no NA's in the dataset, neither are there any negative values. So this dataset looks quite clean. In addition, there are zero values, which may indicate that either no one died of that specific cause in a country in a specific year, or they are missing values. Although it is possible to treat zero's as NA's and replace them with e.g. median or mean, doing this will overwrite all the zero's which are truly reflecting zero mortality. Therefore, in this project we will keep zero's as-is.
 
 When checking the first three columns it shows that *Code* are empty in 690 rows. These appear to be specific to aggregated regions e.g. *OECD Countries* or regions within a country without a valid country code e.g. *Scotland*.
 
@@ -240,7 +240,7 @@ df_merged[sample(nrow(df_merged), 6), 1:5]
 
 ```
 
-Now that total population is merged and tidied up, we would like to know which death causes have large impact worldwide. Since the absolute number of mortality can vary largely depending on the population of a country, a better measurement is the percentage of each death cause, with respect to the total casualties in that row. 
+Now that total population is merged and tidied up, we would like to know which death causes have large impact worldwide. Since the absolute number of mortality can vary largely depending on the population of a country, a better measurement is the percentage of each death cause, with respect to the total casualties in that row. For example, if the total number of deaths in a year for country X is 1000 where 10 people died from outdoor air pollution, then $outdoor.air.pollution.rate=0.01$
 
 We will first create a rate to count the percentage of each specific casualty cause. Then visualise the stats with boxplot to see the major players worldwide. Also *Country* and *Year* will be converted to factor.
 
@@ -472,9 +472,7 @@ for (var in original_vars) {
   }
   print(sprintf("In dTrainAll %s: mean AUC: %4.3f; sd: %4.3f", var, mean(aucs), sd(aucs)))
 }
-# 
-# print(selVars)
-# print(original_vars)
+
 
 ```
 
@@ -735,7 +733,7 @@ print(fig_hclust)
 ```
 
 
-Notice group 1, 2 and 4 are quite separated from each other while 3 and 5 seems to be close or even intersecting each other. Probably $k=5$ is not the best option.
+The ideal clustering result is when all points within a cluster are very close to each other (small distance within a cluster), and large distance between different clusters. Notice group 1, 2 and 4 are quite separated from each other while 3 and 5 seems to be close or even intersecting each other. Probably $k=5$ is not the best option.
 
 Now it is time to use measurements to see if we can spot a better k. We will use within sum of squares (WSS), total sum of squares (TSS), between sum of squares (BSS) to calculate Calinski-Harabasz index (CH index) 
 
@@ -1012,4 +1010,4 @@ print(plot_features(explanation4))
 
 The explanation is exciting! The observations with the best fitting score (the last two) show **total population** as the most valuable feature for our prediction, especially when country's population is large (greater than 27 million). When the population is less than 4 million this variable becomes less important (still within the top 4 features) or even play a contradictory role to our prediction. This confirms our conclusion from previous sections that the larger the population the higher mortality rate will possibly be.
 
-On the other hand, low bone mineral density rate and low birth weight rate (how much percent the number of death from these causes cover in total mortality) seem unexpectedly useful to our prediction. We do not see the unsafe sanitation back though. Perhaps dying from low mineral density and birth weight (requires the mothers to eat properly) indicate that the food security is not guaranteed in certain regions. Since food is a bottom line for survival, if food supply is not stable many other problems will appear that cause higher death rates.
+On the other hand, low bone mineral density rate and low birth weight rate (how much percent the number of death from these causes cover in total mortality) seem suprisingly useful to our prediction. We do not see the unsafe sanitation back though. Perhaps dying from low mineral density and birth weight (requires the mothers to eat properly) indicate that the food security is not guaranteed. Since food is a bottom line for survival, if food supply is not stable many other problems will occur that cause higher death rates for the whole community.
